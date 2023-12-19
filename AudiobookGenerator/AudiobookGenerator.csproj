@@ -8,7 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Speech" Version="7.0.0" />
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+	<PackageReference Include="EpubSharp.dll" Version="1.1.5" />
   </ItemGroup>
 
 </Project>
