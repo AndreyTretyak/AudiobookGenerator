@@ -1,7 +1,7 @@
 # Audiobook Generator
 
-Plan: Generate m4b from ebub/fb2
-Current: generate wav from txt
+Plan: Generate m4b from epub/fb2
+Current: generate wav from epub
 
 ## Using New Repo
 
