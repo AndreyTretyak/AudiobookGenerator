@@ -2,6 +2,7 @@
 
 Plan: Generate m4b from epub/fb2
 Current: generate wav from epub
+For converting from wav to mb4 following tool could be used https://github.com/yermak/AudioBookConverter/releases
 
 ## Using New Repo
 
