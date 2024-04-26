@@ -10,7 +10,6 @@
   <ItemGroup>
     <PackageReference Include="System.Speech" Version="8.0.0" />
     <PackageReference Include="EpubSharp.dll" Version="1.1.5" />
-    <PackageReference Include="FFMpegCore" Version="5.1.0" />
   </ItemGroup>
 
 </Project>
