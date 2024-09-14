@@ -1,7 +1,8 @@
 # Audiobook Generator
 
 Plan: Generate m4b from epub/fb2
-Current: generate mp3 from epub
+Current: generate aac and mb4 from epub, but missing title image and metadata
+Requires ffmpeg to be isntalled for now, this could be done by running `winget install ffmpeg`
 For converting from wav to mb4 following tool could be used https://github.com/yermak/AudioBookConverter/releases
 
 ## Using New Repo

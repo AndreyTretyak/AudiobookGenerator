@@ -3,14 +3,17 @@ using NAudio.Wave;
 using NAudio.Lame;
 using System.Reflection;
 using System.Speech.Synthesis;
+using FFMpegCore;
+using FFMpegCore.Pipes;
+using FFMpegCore.Enums;
 namespace AudiobookGenerator;
 
 internal class Program
 {
-    static void Main()
+    static async Task Main()
     {
         // sample input
-        Main(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub", @"E:\Downloads\", "en-US");
+        await RunAsync(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub", @"E:\Downloads\", "en-US");
     }
 
     /// <summary>
@@ -19,7 +22,7 @@ internal class Program
     /// <param name="input">Directory that contains .epub files.</param>
     /// <param name="output">Directory to put corresponding .wav files.</param>
     /// <param name="language">Language of the voice to use. Defaults to English.</param>
-    static void Main(string input, string output, string language = "en-US")
+    static async Task RunAsync(string input, string output, string language = "en-US")
     {
         var getContent = typeof(EpubReader).Assembly.GetType("EpubSharp.HtmlProcessor", true)
             ?.GetMethod("GetContentAsPlainText", BindingFlags.Static | BindingFlags.Public, [typeof(string)]) 
@@ -28,7 +31,7 @@ internal class Program
         var book = EpubReader.Read(input);
         var bookName = Path.GetFileNameWithoutExtension(input);
         var outDir = Directory.CreateDirectory(Path.Join(output, bookName));
-        var mp3Dir = outDir.CreateSubdirectory("mp3");
+        var aacDir = outDir.CreateSubdirectory("aac");
         var imageDir = outDir.CreateSubdirectory("images");
 
         var chapterNumber = 1;
@@ -41,7 +44,7 @@ internal class Program
                 continue;
             }
             var name = $"{chapterNumber:0000}_{Path.GetFileNameWithoutExtension(chapter.FileName)}";
-            ConvertTextToMp3(name, content, Path.Join(mp3Dir.FullName, $"{name}.mp3"), language);
+            await ConvertTextToAacAsync(name, content, Path.Join(aacDir.FullName, $"{name}.aac"), language);
             chapterNumber++;
         }
 
@@ -62,11 +65,14 @@ internal class Program
         var outputBookPath = Path.Combine(outDir.FullName, $"{bookName}.m4b");
         var coverImage = imageDir.EnumerateFiles().FirstOrDefault();
 
+        Log("Joining", ConsoleColor.Yellow);
+        await ConcatAccToM4bAsync(aacDir, outputBookPath);
         Log("Done", ConsoleColor.Green);
+
         Console.ReadLine();
     }
 
-    private static bool ConvertTextToMp3(string name, string content, string outputFile, string language)
+    private static async Task<bool> ConvertTextToAacAsync(string name, string content, string outputFile, string language)
     {
         try
         {
@@ -79,15 +85,13 @@ internal class Program
             synth.SelectVoice(voice.Name);
 
             using var speechStream = new MemoryStream();
-            // synth.SetOutputToWaveFile(outputFile);
-
             synth.SetOutputToWaveStream(speechStream);
             synth.Speak(builder);
             speechStream.Position = 0;
-            ConvertWavToMp3(speechStream, outputFile);
+            var result = await ConvertWavToAccAsync(speechStream, outputFile);
 
             Log($"Succeeded for {name}", ConsoleColor.Green);
-            return true;
+            return result;
         }
         catch (Exception ex)
         {
@@ -96,11 +100,19 @@ internal class Program
         }
     }
 
-    private static void ConvertWavToMp3(Stream wavStream, string mp3File)
+    private static Task<bool> ConvertWavToAccAsync(Stream wavStream, string output)
     {
-        using var reader = new WaveFileReader(wavStream);
-        using var writer = new LameMP3FileWriter(mp3File, reader.WaveFormat, LAMEPreset.VBR_90);
-        reader.CopyTo(writer);
+        return FFMpegArguments
+            .FromPipeInput(new StreamPipeSource(wavStream))
+            .OutputToFile(output, true, options => options.WithAudioCodec(AudioCodec.Aac))
+            .ProcessAsynchronously();
+    }
+
+    private static Task<bool> ConcatAccToM4bAsync(DirectoryInfo directoryInfo, string output)
+    {
+        return FFMpegArguments.FromConcatInput(directoryInfo.GetFiles().Select(f => f.FullName))
+            .OutputToFile(output, true)
+            .ProcessAsynchronously();
     }
 
     static void Log(string message, ConsoleColor color)
