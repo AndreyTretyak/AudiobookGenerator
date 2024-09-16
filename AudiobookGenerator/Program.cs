@@ -83,11 +83,10 @@ internal class Program
             }
         }
 
-        var outputBookPath = Path.Combine(outDir.FullName, $"{bookName}.m4b");
         var coverImage = imageDir.EnumerateFiles().FirstOrDefault();
 
         Log("Joining", ConsoleColor.Yellow);
-        await ConcatAccToM4bAsync(aacDir, outputBookPath, bookName);
+        await ConcatAccToM4bAsync(aacDir, outDir, $"{bookName}.m4b");
         Log("Done joining", ConsoleColor.Green);
 
         //if (coverImage != null) 
@@ -137,54 +136,42 @@ internal class Program
             .ProcessAsynchronously();
     }
 
-    private static async Task<bool> ConcatAccToM4bAsync(DirectoryInfo directoryInfo, string output, string title)
+    private static async Task<bool> ConcatAccToM4bAsync(DirectoryInfo inputDir, DirectoryInfo outputDir, string outputFileName)
     {
-        var files = directoryInfo.GetFiles().Select(f => f.FullName).ToArray();
+        var files = inputDir.GetFiles().Select(f => f.FullName).ToArray();
 
-        using var memoryStream = new MemoryStream();
-        using var writer = new StreamWriter(memoryStream);
-        writer.WriteLine(";FFMETADATA1");
 
-        long start = 0;
-        foreach (var file in files)
+        var chaptersFile = Path.Combine(outputDir.FullName, "chapters.txt");
+        using (StreamWriter stream = new StreamWriter(chaptersFile))
         {
-            var mediaInfo = await FFProbe.AnalyseAsync(file);
-            var end = start + (long)mediaInfo.Duration.TotalMilliseconds;
+            stream.WriteLine(";FFMETADATA1");
 
-            writer.WriteLine("[CHAPTER]");
-            writer.WriteLine("TIMEBASE=1/1000");
-            writer.WriteLine($"START={start}");
-            writer.WriteLine($"END={end}");
-            writer.WriteLine($"title={Path.GetFileNameWithoutExtension(file)}");
-            writer.WriteLine("");
+            long start = 0;
+            foreach (var file in files)
+            {
+                var mediaInfo = await FFProbe.AnalyseAsync(file);
+                var end = start + (long)mediaInfo.Duration.TotalMilliseconds;
 
-            start = end + 1;
+                stream.WriteLine("[CHAPTER]");
+                stream.WriteLine("TIMEBASE=1/1000");
+                stream.WriteLine($"START={start}");
+                stream.WriteLine($"END={end}");
+                stream.WriteLine($"title={Path.GetFileNameWithoutExtension(file)}");
+                stream.WriteLine("");
+
+                start = end + 1;
+            }
         }
 
-        writer.Flush();
-        memoryStream.Position = 0;
+        var output = Path.Join(outputDir.FullName, outputFileName);
 
-        var chaptersFile = Path.Combine(directoryInfo.FullName, "chapters.txt");
-        using (FileStream fileStream = new FileStream(chaptersFile, FileMode.Create, FileAccess.Write))
-        {
-            memoryStream.Position = 0; // Reset the position to the beginning of the stream
-            memoryStream.CopyTo(fileStream);
-        }
-
-        var intermediateFile = output.Replace(".m4b", ".aac");
-
-        var result = await FFMpegArguments
-            .FromConcatInput(files)
-            .OutputToFile(intermediateFile, true)
-            .ProcessAsynchronously();
-
-        if (!result) return result;
 
         return await FFMpegArguments
-            .FromFileInput(intermediateFile)
+            .FromConcatInput(files)
             .AddFileInput(chaptersFile)
-            .OutputToFile(output, true, options => options.WithCustomArgument("-metadata:s:v title=\"Album cover\" -metadata:s:v comment=\"Need to add description\""))
+            .OutputToFile(output, true)
             .ProcessAsynchronously();
+
     }
 
     private static Task<bool> AddCoverImageAsync(string file, string imagePath) 
