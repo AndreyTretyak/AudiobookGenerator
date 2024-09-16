@@ -10,7 +10,9 @@
   <ItemGroup>
     <PackageReference Include="System.Speech" Version="8.0.0" />
     <PackageReference Include="EpubSharp.dll" Version="1.1.5" />
+    <PackageReference Include="VersOne.Epub" Version="3.3.2" />
     <PackageReference Include="FFMpegCore" Version="5.1.0" />
+    <PackageReference Include="UnDotNet.HtmlToText" Version="1.1.0" />
   </ItemGroup>
 
 </Project>

@@ -1,12 +1,12 @@
 ﻿using EpubSharp;
-using NAudio.Wave;
-using NAudio.Lame;
 using System.Reflection;
 using System.Speech.Synthesis;
 using FFMpegCore;
 using FFMpegCore.Pipes;
 using FFMpegCore.Enums;
-namespace AudiobookGenerator;
+using UnDotNet.HtmlToText;
+using System.IO;
+namespace YewCore.AudiobookGenerator;
 
 internal class Program
 {
@@ -27,6 +27,27 @@ internal class Program
         var getContent = typeof(EpubReader).Assembly.GetType("EpubSharp.HtmlProcessor", true)
             ?.GetMethod("GetContentAsPlainText", BindingFlags.Static | BindingFlags.Public, [typeof(string)]) 
             ?? throw new InvalidOperationException("internals of EpubSharp changed");
+
+        //var t = VersOne.Epub.EpubReader.ReadBook(input);
+        //var converter = new HtmlToTextConverter();
+        //var options = new HtmlToTextOptions()
+        //{
+        //    Formatters = 
+        //    {
+        //        { Selectors.A, static (elem, walk, builder, formatOptions) => builder.AddLiteral(elem.NodeValue) },
+        //        { Selectors.Img, static (elem, walk, builder, formatOptions) => builder.AddLiteral($"Book image showing {elem.Attributes["alt"]}")}
+        //    }
+        //};
+
+        //options.Img.Options.IgnoreHref = true;
+        //options.A.Options.IgnoreHref = true;
+        //options.Img.Options.IgnoreHref = true;
+        //options.Img.Options.NoAnchorUrl = true;
+
+        //foreach (var c in t.ReadingOrder) 
+        //{
+        //    var r1 = converter.Convert(c.Content, options);
+        //}
 
         var book = EpubReader.Read(input);
         var bookName = Path.GetFileNameWithoutExtension(input);
@@ -66,9 +87,17 @@ internal class Program
         var coverImage = imageDir.EnumerateFiles().FirstOrDefault();
 
         Log("Joining", ConsoleColor.Yellow);
-        await ConcatAccToM4bAsync(aacDir, outputBookPath);
-        Log("Done", ConsoleColor.Green);
+        await ConcatAccToM4bAsync(aacDir, outputBookPath, bookName);
+        Log("Done joining", ConsoleColor.Green);
 
+        //if (coverImage != null) 
+        //{
+        //    Log($"Adding cover image {coverImage.FullName}", ConsoleColor.Yellow);
+        //    await AddCoverImageAsync(outputBookPath, coverImage.FullName);
+        //    Log("Done adding cover", ConsoleColor.Green);
+        //}
+
+        Log("Done", ConsoleColor.Green);
         Console.ReadLine();
     }
 
@@ -108,10 +137,62 @@ internal class Program
             .ProcessAsynchronously();
     }
 
-    private static Task<bool> ConcatAccToM4bAsync(DirectoryInfo directoryInfo, string output)
+    private static async Task<bool> ConcatAccToM4bAsync(DirectoryInfo directoryInfo, string output, string title)
     {
-        return FFMpegArguments.FromConcatInput(directoryInfo.GetFiles().Select(f => f.FullName))
-            .OutputToFile(output, true)
+        var files = directoryInfo.GetFiles().Select(f => f.FullName).ToArray();
+
+        using var memoryStream = new MemoryStream();
+        using var writer = new StreamWriter(memoryStream);
+        writer.WriteLine(";FFMETADATA1");
+
+        long start = 0;
+        foreach (var file in files)
+        {
+            var mediaInfo = await FFProbe.AnalyseAsync(file);
+            var end = start + (long)mediaInfo.Duration.TotalMilliseconds;
+
+            writer.WriteLine("[CHAPTER]");
+            writer.WriteLine("TIMEBASE=1/1000");
+            writer.WriteLine($"START={start}");
+            writer.WriteLine($"END={end}");
+            writer.WriteLine($"title={Path.GetFileNameWithoutExtension(file)}");
+            writer.WriteLine("");
+
+            start = end + 1;
+        }
+
+        writer.Flush();
+        memoryStream.Position = 0;
+
+        var chaptersFile = Path.Combine(directoryInfo.FullName, "chapters.txt");
+        using (FileStream fileStream = new FileStream(chaptersFile, FileMode.Create, FileAccess.Write))
+        {
+            memoryStream.Position = 0; // Reset the position to the beginning of the stream
+            memoryStream.CopyTo(fileStream);
+        }
+
+        var intermediateFile = output.Replace(".m4b", ".aac");
+
+        var result = await FFMpegArguments
+            .FromConcatInput(files)
+            .OutputToFile(intermediateFile, true)
+            .ProcessAsynchronously();
+
+        if (!result) return result;
+
+        return await FFMpegArguments
+            .FromFileInput(intermediateFile)
+            .AddFileInput(chaptersFile)
+            .OutputToFile(output, true, options => options.WithCustomArgument("-metadata:s:v title=\"Album cover\" -metadata:s:v comment=\"Need to add description\""))
+            .ProcessAsynchronously();
+    }
+
+    private static Task<bool> AddCoverImageAsync(string file, string imagePath) 
+    {
+        return FFMpegArguments
+            .FromFileInput(imagePath, verifyExists: true, options => options.Loop(1).ForceFormat("image2"))
+            .AddFileInput(file)
+            .OutputToFile(file, overwrite: true)
             .ProcessAsynchronously();
     }
 
