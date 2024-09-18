@@ -6,6 +6,7 @@ using FFMpegCore.Pipes;
 using FFMpegCore.Enums;
 using UnDotNet.HtmlToText;
 using System.IO;
+using System.Diagnostics;
 namespace YewCore.AudiobookGenerator;
 
 internal class Program
@@ -28,7 +29,7 @@ internal class Program
             ?.GetMethod("GetContentAsPlainText", BindingFlags.Static | BindingFlags.Public, [typeof(string)]) 
             ?? throw new InvalidOperationException("internals of EpubSharp changed");
 
-        //var t = VersOne.Epub.EpubReader.ReadBook(input);
+        var t = VersOne.Epub.EpubReader.ReadBook(input);
         //var converter = new HtmlToTextConverter();
         //var options = new HtmlToTextOptions()
         //{
@@ -44,9 +45,10 @@ internal class Program
         //options.Img.Options.IgnoreHref = true;
         //options.Img.Options.NoAnchorUrl = true;
 
-        //foreach (var c in t.ReadingOrder) 
+        //foreach (var c in t.ReadingOrder)
         //{
         //    var r1 = converter.Convert(c.Content, options);
+        //    var r = HtmlToPlainText(c.Content);
         //}
 
         var book = EpubReader.Read(input);
@@ -83,18 +85,20 @@ internal class Program
             }
         }
 
-        var coverImage = imageDir.EnumerateFiles().FirstOrDefault();
+        var coverImage = imageDir.EnumerateFiles().FirstOrDefault(i => i.Name.Contains("cover" , StringComparison.OrdinalIgnoreCase)) 
+            ?? imageDir.EnumerateFiles().FirstOrDefault();
 
         Log("Joining", ConsoleColor.Yellow);
-        await ConcatAccToM4bAsync(aacDir, outDir, $"{bookName}.m4b");
+        var bookFileName = $"{bookName}.m4b";
+        await ConcatAccToM4bAsync(aacDir, outDir, bookFileName);
         Log("Done joining", ConsoleColor.Green);
 
-        //if (coverImage != null) 
-        //{
-        //    Log($"Adding cover image {coverImage.FullName}", ConsoleColor.Yellow);
-        //    await AddCoverImageAsync(outputBookPath, coverImage.FullName);
-        //    Log("Done adding cover", ConsoleColor.Green);
-        //}
+        if (coverImage != null)
+        {
+            Log($"Adding cover image {coverImage.FullName}", ConsoleColor.Yellow);
+            await AddCoverImageAsync(Path.Combine(outDir.FullName, bookFileName), coverImage.FullName);
+            Log("Done adding cover", ConsoleColor.Green);
+        }
 
         Log("Done", ConsoleColor.Green);
         Console.ReadLine();
@@ -171,16 +175,28 @@ internal class Program
             .AddFileInput(chaptersFile)
             .OutputToFile(output, true)
             .ProcessAsynchronously();
-
     }
 
-    private static Task<bool> AddCoverImageAsync(string file, string imagePath) 
+    private static Task<bool> AddCoverImageAsync(string filePath, string coverImagePath) 
     {
-        return FFMpegArguments
-            .FromFileInput(imagePath, verifyExists: true, options => options.Loop(1).ForceFormat("image2"))
-            .AddFileInput(file)
-            .OutputToFile(file, overwrite: true)
-            .ProcessAsynchronously();
+        var file = TagLib.File.Create(filePath);
+
+        var coverImage = new TagLib.Picture(coverImagePath)
+        {
+            Type = TagLib.PictureType.FrontCover
+        };
+
+        file.Tag.Pictures = [coverImage];
+        file.Save();
+
+        return Task.FromResult(true);
+    }
+
+    static string HtmlToPlainText(string html)
+    {
+        var doc = new HtmlAgilityPack.HtmlDocument();
+        doc.LoadHtml(html);
+        return doc.DocumentNode.InnerText;
     }
 
     static void Log(string message, ConsoleColor color)
