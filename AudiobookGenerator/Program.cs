@@ -28,7 +28,6 @@ internal class Program
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.CreateNoWindow = true;
 
-        // Start the process
         process.Start();
 
         return process.WaitForExitAsync(cancellationToken);
@@ -42,9 +41,9 @@ internal class Program
     /// <param name="language">Language of the voice to use. Defaults to English.</param>
     static async Task RunAsync(string input, string output, string language = "en-US")
     {
-        // CancellationToken cancellationToken = default;
+        CancellationToken cancellationToken = default;
 
-        // await InstallDependenciesAsync(cancellationToken);
+        await InstallDependenciesAsync(cancellationToken);
 
         var book = VersOne.Epub.EpubReader.ReadBook(input);
         var bookName = Path.GetFileNameWithoutExtension(input);
