@@ -1,12 +1,12 @@
-﻿using EpubSharp;
-using System.Reflection;
-using System.Speech.Synthesis;
+﻿using System.Speech.Synthesis;
 using FFMpegCore;
 using FFMpegCore.Pipes;
 using FFMpegCore.Enums;
-using UnDotNet.HtmlToText;
-using System.IO;
 using System.Diagnostics;
+using Microsoft.Playwright;
+using TagLib;
+using VersOne.Epub;
+using System.ComponentModel.DataAnnotations;
 namespace YewCore.AudiobookGenerator;
 
 internal class Program
@@ -17,6 +17,23 @@ internal class Program
         await RunAsync(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub", @"E:\Downloads\", "en-US");
     }
 
+    private static Task InstallDependenciesAsync(CancellationToken cancellationToken) 
+    {
+        Microsoft.Playwright.Program.Main(["install"]);
+
+        Process process = new Process();
+        process.StartInfo.FileName = "cmd.exe";
+        process.StartInfo.Arguments = "/c winget install ffmpeg";
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+
+        // Start the process
+        process.Start();
+
+        return process.WaitForExitAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Generate .wav files from .txt
     /// </summary>
@@ -25,83 +42,79 @@ internal class Program
     /// <param name="language">Language of the voice to use. Defaults to English.</param>
     static async Task RunAsync(string input, string output, string language = "en-US")
     {
-        var getContent = typeof(EpubReader).Assembly.GetType("EpubSharp.HtmlProcessor", true)
-            ?.GetMethod("GetContentAsPlainText", BindingFlags.Static | BindingFlags.Public, [typeof(string)]) 
-            ?? throw new InvalidOperationException("internals of EpubSharp changed");
+        // CancellationToken cancellationToken = default;
 
-        var t = VersOne.Epub.EpubReader.ReadBook(input);
-        //var converter = new HtmlToTextConverter();
-        //var options = new HtmlToTextOptions()
-        //{
-        //    Formatters = 
-        //    {
-        //        { Selectors.A, static (elem, walk, builder, formatOptions) => builder.AddLiteral(elem.NodeValue) },
-        //        { Selectors.Img, static (elem, walk, builder, formatOptions) => builder.AddLiteral($"Book image showing {elem.Attributes["alt"]}")}
-        //    }
-        //};
+        // await InstallDependenciesAsync(cancellationToken);
 
-        //options.Img.Options.IgnoreHref = true;
-        //options.A.Options.IgnoreHref = true;
-        //options.Img.Options.IgnoreHref = true;
-        //options.Img.Options.NoAnchorUrl = true;
-
-        //foreach (var c in t.ReadingOrder)
-        //{
-        //    var r1 = converter.Convert(c.Content, options);
-        //    var r = HtmlToPlainText(c.Content);
-        //}
-
-        var book = EpubReader.Read(input);
+        var book = VersOne.Epub.EpubReader.ReadBook(input);
         var bookName = Path.GetFileNameWithoutExtension(input);
         var outDir = Directory.CreateDirectory(Path.Join(output, bookName));
         var aacDir = outDir.CreateSubdirectory("aac");
         var imageDir = outDir.CreateSubdirectory("images");
 
         var chapterNumber = 1;
-        foreach (var chapter in book.SpecialResources.HtmlInReadingOrder) 
+        foreach (var chapter in book.ReadingOrder)
         {
-            var content = getContent.Invoke(null, [chapter.TextContent]) as string ?? throw new InvalidOperationException($"Failed to get content of {chapter.FileName}");
-            if (string.IsNullOrEmpty(content)) 
+            var (title, content) = await RenderPageAsync(chapter.Content);
+            if (string.IsNullOrEmpty(content))
             {
-                Log($"Skipping generation for ${chapter.FileName} since content is empty.", ConsoleColor.Yellow);
+                Log($"Skipping generation for ${chapter.FilePath} since content is empty.", ConsoleColor.Yellow);
                 continue;
             }
-            var name = $"{chapterNumber:0000}_{Path.GetFileNameWithoutExtension(chapter.FileName)}";
+
+            title = string.IsNullOrEmpty(title) ? Path.GetFileNameWithoutExtension(chapter.FilePath) : title;
+            var name = $"{chapterNumber:0000} {title}";
             await ConvertTextToAacAsync(name, content, Path.Join(aacDir.FullName, $"{name}.aac"), language);
             chapterNumber++;
         }
 
-        var images = book.Resources.Images;
-        if (images.Count > 0) 
+        var fileNumber = 1;
+        foreach (var file in book.Content.Images.Local)
         {
-            var imageNumber = 1;
-            foreach (var image in images)
-            {
-                var imageName = $"{imageNumber:0000}_{Path.GetFileName(image.FileName)}";
-                var path = Path.Join(imageDir.FullName, imageName);
-                Log($"Saving image {imageName}", ConsoleColor.Green);
-                File.WriteAllBytes(path, image.Content);
-                imageNumber++;
-            }
+            var name = $"{fileNumber:0000} {Path.GetFileName(file.FilePath)}";
+            var path = Path.Join(imageDir.FullName, name);
+            Log($"Saving file {name}", ConsoleColor.Green);
+            System.IO.File.WriteAllBytes(path, file.Content);
+            fileNumber++;
         }
-
-        var coverImage = imageDir.EnumerateFiles().FirstOrDefault(i => i.Name.Contains("cover" , StringComparison.OrdinalIgnoreCase)) 
-            ?? imageDir.EnumerateFiles().FirstOrDefault();
 
         Log("Joining", ConsoleColor.Yellow);
         var bookFileName = $"{bookName}.m4b";
         await ConcatAccToM4bAsync(aacDir, outDir, bookFileName);
         Log("Done joining", ConsoleColor.Green);
 
-        if (coverImage != null)
+        if (book.CoverImage != null)
         {
-            Log($"Adding cover image {coverImage.FullName}", ConsoleColor.Yellow);
-            await AddCoverImageAsync(Path.Combine(outDir.FullName, bookFileName), coverImage.FullName);
+            Log($"Adding cover image", ConsoleColor.Yellow);
+            await AddCoverImageAndTagsAsync(Path.Combine(outDir.FullName, bookFileName), book);
             Log("Done adding cover", ConsoleColor.Green);
         }
 
         Log("Done", ConsoleColor.Green);
         Console.ReadLine();
+    }
+
+    private static async Task<(string title, string content)> RenderPageAsync(string htmlContent) 
+    {
+        using var playwright = await Playwright.CreateAsync();
+        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+        var page = await browser.NewPageAsync();
+
+        await page.SetContentAsync(htmlContent);
+
+        await page.EvaluateAsync(@"() => {
+                const images = document.querySelectorAll('img');
+                images.forEach(img => {
+                    const altText = 'book image:' + img.getAttribute('alt');
+                    const textNode = document.createTextNode(altText);
+                    img.parentNode.replaceChild(textNode, img);
+                });
+            }");
+
+
+        var title = await page.InnerTextAsync("title");
+        var content = await page.InnerTextAsync("body");
+        return (title, content);
     }
 
     private static async Task<bool> ConvertTextToAacAsync(string name, string content, string outputFile, string language)
@@ -177,26 +190,31 @@ internal class Program
             .ProcessAsynchronously();
     }
 
-    private static Task<bool> AddCoverImageAsync(string filePath, string coverImagePath) 
+    private static Task<bool> AddCoverImageAndTagsAsync(string filePath, EpubBook book) 
     {
+        static Picture ByteToPicture(byte[] bytes) => new TagLib.Picture(new ByteVector(bytes));
+
         var file = TagLib.File.Create(filePath);
 
-        var coverImage = new TagLib.Picture(coverImagePath)
+        IPicture? coverImage = null;
+        if (book.CoverImage != null) 
         {
-            Type = TagLib.PictureType.FrontCover
-        };
+            coverImage = ByteToPicture(book.CoverImage);
+            coverImage.Type = TagLib.PictureType.FrontCover;
+        } 
 
-        file.Tag.Pictures = [coverImage];
+        file.Tag.Title = book.Title;
+        file.Tag.TitleSort = book.Title;
+        file.Tag.Album = book.Title;
+        file.Tag.Comment = book.Description;
+        file.Tag.Performers = [.. book.AuthorList];
+
+        var allImages = book.Content.Images.Local.Select(i => ByteToPicture(i.Content));
+        file.Tag.Pictures = coverImage != null ? [coverImage, ..allImages] : allImages.ToArray();
+
         file.Save();
 
         return Task.FromResult(true);
-    }
-
-    static string HtmlToPlainText(string html)
-    {
-        var doc = new HtmlAgilityPack.HtmlDocument();
-        doc.LoadHtml(html);
-        return doc.DocumentNode.InnerText;
     }
 
     static void Log(string message, ConsoleColor color)
