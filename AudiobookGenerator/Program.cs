@@ -6,8 +6,7 @@ using System.Diagnostics;
 using Microsoft.Playwright;
 using TagLib;
 using VersOne.Epub;
-using System.ComponentModel.DataAnnotations;
-namespace YewCore.AudiobookGenerator;
+namespace YewCone.AudiobookGenerator;
 
 internal class Program
 {
@@ -96,7 +95,7 @@ internal class Program
     private static async Task<(string title, string content)> RenderPageAsync(string htmlContent) 
     {
         using var playwright = await Playwright.CreateAsync();
-        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true });
         var page = await browser.NewPageAsync();
 
         await page.SetContentAsync(htmlContent);
@@ -109,7 +108,6 @@ internal class Program
                     img.parentNode.replaceChild(textNode, img);
                 });
             }");
-
 
         var title = await page.InnerTextAsync("title");
         var content = await page.InnerTextAsync("body");
@@ -223,4 +221,48 @@ internal class Program
         Console.WriteLine(message);
         Console.ForegroundColor = currentColor;
     }
+
+    //static async Task Main(string[] args)
+    //{
+    //    var config = SpeechConfig.FromSubscription("YourSubscriptionKey", "YourServiceRegion");
+
+    //    var audioConfig = AudioConfig.FromWavFileOutput("output.wav");
+
+    //    using var synthesizer = new SpeechSynthesizer(config, audioConfig);
+    //    var result = await synthesizer.SpeakTextAsync("Hello, world!");
+
+    //    if (result.Reason == ResultReason.SynthesizingAudioCompleted)
+    //    {
+    //        Console.WriteLine("Speech synthesized to file successfully.");
+    //    }
+    //    else if (result.Reason == ResultReason.Canceled)
+    //    {
+    //        var cancellation = SpeechSynthesisCancellationDetails.FromResult(result);
+    //        Console.WriteLine($"CANCELED: Reason={cancellation.Reason}");
+    //        Console.WriteLine($"CANCELED: ErrorDetails={cancellation.ErrorDetails}");
+    //    }
+    //}
+
+    //public static async Task Main(string[] args)
+    //{
+    //    var playwright = await Playwright.CreateAsync();
+    //    var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+    //    {
+    //        Channel = "msedge", // Use the Edge browser
+    //        Headless = false
+    //    });
+    //    var page = await browser.NewPageAsync();
+    //    await page.GotoAsync("https://example.com");
+
+    //    // Inject JavaScript to use the Web Speech API for TTS
+    //    await page.EvaluateAsync(@"() => {
+    //        const utterance = new SpeechSynthesisUtterance('Hello, world!');
+    //        speechSynthesis.speak(utterance);
+    //    }");
+
+    //    // Wait for the speech to finish
+    //    await Task.Delay(5000);
+
+    //    await browser.CloseAsync();
+    //}
 }
