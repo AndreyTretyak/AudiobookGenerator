@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Playwright" Version="1.47.0" />
+    <PackageVersion Include="System.Speech" Version="8.0.0" />
+    <PackageVersion Include="VersOne.Epub" Version="3.3.2" />
+    <PackageVersion Include="FFMpegCore" Version="5.1.0" />
+    <PackageVersion Include="TagLibSharp" Version="2.3.0" />
+    <PackageVersion Include="System.Text.Json" Version="8.0.4" />
+  </ItemGroup>
+</Project>

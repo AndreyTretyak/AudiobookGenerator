@@ -1,9 +1,17 @@
 # Audiobook Generator
 
 Plan: Generate m4b from epub/fb2
+
 Current: generate aac and mb4 from epub with chapter and images
+
 Next step: add UI and configurability
+
+Posible improvements: 
+* remove the need of installing dependencies
+* more language support
+
 Requires ffmpeg to be isntalled for now, this could be done by running `winget install ffmpeg`
+
 Also using playwright that requires installing step, may need to improve later.
 For converting from wav to mb4 following tool could be used https://github.com/yermak/AudioBookConverter/releases
 
