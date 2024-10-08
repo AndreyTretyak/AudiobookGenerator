@@ -22,7 +22,7 @@ internal class Program
 
         Process process = new Process();
         process.StartInfo.FileName = "cmd.exe";
-        process.StartInfo.Arguments = "/c winget install ffmpeg";
+        process.StartInfo.Arguments = "/c winget install ffmpeg --accept-source-agreements";
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.CreateNoWindow = true;
