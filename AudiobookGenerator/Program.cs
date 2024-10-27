@@ -6,7 +6,132 @@ using System.Diagnostics;
 using Microsoft.Playwright;
 using TagLib;
 using VersOne.Epub;
+using VersOne.Epub.Options;
+using System.Net.Http;
+using System.Threading;
 namespace YewCone.AudiobookGenerator;
+
+
+public readonly record struct BookChapter(string FileName, string Name, string Content);
+
+public readonly record struct BookImage(string FileName, byte[] Content);
+
+public readonly record struct EpubBook(
+    string FileName,
+    string Title,
+    string Description,
+    List<string> AuthorList,
+    byte[]? CoverImage,
+    BookChapter[] Chapters,
+    BookImage[] Images);
+
+public interface IEpubBookParser
+{
+    Task<EpubBook> ParseAsync(FileInfo fileInfo, CancellationToken token);
+}
+
+public interface IHtmlConverter
+{
+    Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
+}
+
+public interface IInitializer
+{
+    Task InitializeAsync(CancellationToken cancellationToken);
+}
+
+public interface IAudioProducer
+{
+    Task<Stream> ConvertTextToWavAsync(string content, string language, CancellationToken cancellationToken);
+}
+
+public interface IAudioConverter
+{
+    Task<Stream> ConvertWavToAacAsync(Stream wavStream, CancellationToken cancellationToken);
+
+    Task<Stream> CreateM4bAsync(IEnumerable<Stream> aacChapters, CancellationToken cancellationToken);
+
+    Task AddImagesAndTagsToM4bAsync(CancellationToken cancellationToken);
+}
+
+internal class PlaywrightHtmlConverter : IHtmlConverter, IInitializer, IDisposable
+{
+    private IPlaywright? _playwright;
+    private IBrowser? _browser;
+
+    public async Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        Microsoft.Playwright.Program.Main(["install"]);
+        _playwright = await Playwright.CreateAsync().ConfigureAwait(false);
+        _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true }).ConfigureAwait(false);
+    }
+
+    public async Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
+    {
+        if (_browser == null) 
+        {
+            throw new InvalidOperationException($"{nameof(InitializeAsync)} should be called before using this method");
+        }
+
+        var page = await _browser.NewPageAsync().ConfigureAwait(false);
+
+        await page.SetContentAsync(htmlContent).ConfigureAwait(false);
+
+        await page.EvaluateAsync(@"() => {
+                const images = document.querySelectorAll('img');
+                images.forEach(img => {
+                    const altText = 'book image:' + img.getAttribute('alt');
+                    const textNode = document.createTextNode(altText);
+                    img.parentNode.replaceChild(textNode, img);
+                });
+            }");
+
+        var title = await page.InnerTextAsync("title").ConfigureAwait(false);
+        var content = await page.InnerTextAsync("body").ConfigureAwait(false);
+        return (title, content);
+    }
+
+    public void Dispose() => _playwright?.Dispose();
+}
+
+internal class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
+{
+    public EpubReaderOptions EpubReaderOptions { get; set; } = new EpubReaderOptions();
+
+    public async Task<EpubBook> ParseAsync(FileInfo fileInfo, CancellationToken cancellationToken)
+    {
+        var stream = fileInfo.OpenRead();
+        var book = EpubReader.ReadBook(stream, EpubReaderOptions);
+        var convertTask = book.ReadingOrder.Select(chapter => ChapterToPlainTextAsync(chapter, cancellationToken));
+        var plainTextChapters = await Task.WhenAll(convertTask).ConfigureAwait(false);
+        return new EpubBook(
+            fileInfo.Name,
+            book.Title,
+            book.Description ?? string.Empty,
+            book.AuthorList,
+            book.CoverImage,
+            plainTextChapters.Where(chapter => !string.IsNullOrEmpty(chapter.Content)).Select(ConvertChapter).ToArray(),
+            book.Content.Images.Local.Select(ConvertImage).ToArray());
+    }
+
+    private async Task<(string Title, string Content)> ChapterToPlainTextAsync(EpubLocalTextContentFile chapter, CancellationToken cancellationToken)
+    {
+        var (title, content) = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
+        title = string.IsNullOrEmpty(title) ? Path.GetFileNameWithoutExtension(chapter.FilePath) : title;
+        return (title, content);
+    }
+
+    private static BookChapter ConvertChapter((string Title, string Content) chapter, int index) =>
+        new BookChapter(
+            $"{(index + 1):0000} {chapter.Title}",
+            chapter.Title,
+            chapter.Content);
+
+    private static BookImage ConvertImage(EpubLocalByteContentFile imageFile, int index) =>
+        new BookImage(
+            $"{(index + 1):0000} {Path.GetFileName(imageFile.FilePath)}",
+            imageFile.Content);
+}
 
 internal class Program
 {
@@ -44,40 +169,29 @@ internal class Program
 
         await InstallDependenciesAsync(cancellationToken);
 
-        var book = VersOne.Epub.EpubReader.ReadBook(input);
-        var bookName = Path.GetFileNameWithoutExtension(input);
-        var outDir = Directory.CreateDirectory(Path.Join(output, bookName));
+        var htmlConverter = new PlaywrightHtmlConverter();
+        await htmlConverter.InitializeAsync(cancellationToken);
+        var bookParser = new VersOneEpubBookParser(htmlConverter);
+        var book = await bookParser.ParseAsync(new FileInfo(input), cancellationToken);
+
+        var outDir = Directory.CreateDirectory(Path.Join(output, book.FileName));
         var aacDir = outDir.CreateSubdirectory("aac");
         var imageDir = outDir.CreateSubdirectory("images");
 
-        var chapterNumber = 1;
-        foreach (var chapter in book.ReadingOrder)
+        foreach (var chapter in book.Chapters)
         {
-            var (title, content) = await RenderPageAsync(chapter.Content);
-            if (string.IsNullOrEmpty(content))
-            {
-                Log($"Skipping generation for ${chapter.FilePath} since content is empty.", ConsoleColor.Yellow);
-                continue;
-            }
-
-            title = string.IsNullOrEmpty(title) ? Path.GetFileNameWithoutExtension(chapter.FilePath) : title;
-            var name = $"{chapterNumber:0000} {title}";
-            await ConvertTextToAacAsync(name, content, Path.Join(aacDir.FullName, $"{name}.aac"), language);
-            chapterNumber++;
+            await ConvertTextToAacAsync(chapter.FileName, chapter.Content, Path.Join(aacDir.FullName, $"{chapter.FileName}.aac"), language);
         }
 
-        var fileNumber = 1;
-        foreach (var file in book.Content.Images.Local)
+        foreach (var image in book.Images)
         {
-            var name = $"{fileNumber:0000} {Path.GetFileName(file.FilePath)}";
-            var path = Path.Join(imageDir.FullName, name);
-            Log($"Saving file {name}", ConsoleColor.Green);
-            System.IO.File.WriteAllBytes(path, file.Content);
-            fileNumber++;
+            var path = Path.Join(imageDir.FullName, image.FileName);
+            Log($"Saving file {image.FileName}", ConsoleColor.Green);
+            System.IO.File.WriteAllBytes(path, image.Content);
         }
 
         Log("Joining", ConsoleColor.Yellow);
-        var bookFileName = $"{bookName}.m4b";
+        var bookFileName = $"{book.FileName}.m4b";
         await ConcatAccToM4bAsync(aacDir, outDir, bookFileName);
         Log("Done joining", ConsoleColor.Green);
 
@@ -90,28 +204,6 @@ internal class Program
 
         Log("Done", ConsoleColor.Green);
         Console.ReadLine();
-    }
-
-    private static async Task<(string title, string content)> RenderPageAsync(string htmlContent) 
-    {
-        using var playwright = await Playwright.CreateAsync();
-        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true });
-        var page = await browser.NewPageAsync();
-
-        await page.SetContentAsync(htmlContent);
-
-        await page.EvaluateAsync(@"() => {
-                const images = document.querySelectorAll('img');
-                images.forEach(img => {
-                    const altText = 'book image:' + img.getAttribute('alt');
-                    const textNode = document.createTextNode(altText);
-                    img.parentNode.replaceChild(textNode, img);
-                });
-            }");
-
-        var title = await page.InnerTextAsync("title");
-        var content = await page.InnerTextAsync("body");
-        return (title, content);
     }
 
     private static async Task<bool> ConvertTextToAacAsync(string name, string content, string outputFile, string language)
@@ -206,7 +298,7 @@ internal class Program
         file.Tag.Comment = book.Description;
         file.Tag.Performers = [.. book.AuthorList];
 
-        var allImages = book.Content.Images.Local.Select(i => ByteToPicture(i.Content));
+        var allImages = book.Images.Select(i => ByteToPicture(i.Content));
         file.Tag.Pictures = coverImage != null ? [coverImage, ..allImages] : allImages.ToArray();
 
         file.Save();
