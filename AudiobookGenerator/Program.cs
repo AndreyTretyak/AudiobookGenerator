@@ -9,6 +9,9 @@ using VersOne.Epub;
 using VersOne.Epub.Options;
 using System.Net.Http;
 using System.Threading;
+using System.Xml.Linq;
+using System.Collections.Generic;
+using System.Collections;
 namespace YewCone.AudiobookGenerator;
 
 
@@ -40,9 +43,11 @@ public interface IInitializer
     Task InitializeAsync(CancellationToken cancellationToken);
 }
 
-public interface IAudioProducer
+public interface IAudioSynthesizer
 {
-    Task<Stream> ConvertTextToWavAsync(string content, string language, CancellationToken cancellationToken);
+    IEnumerable<VoiceInfo> GetVoices();
+
+    Task<Stream> SynthesizeWavFromTextAsync(string name, string content, VoiceInfo voice, CancellationToken cancellationToken);
 }
 
 public interface IAudioConverter
@@ -52,6 +57,38 @@ public interface IAudioConverter
     Task<Stream> CreateM4bAsync(IEnumerable<Stream> aacChapters, CancellationToken cancellationToken);
 
     Task AddImagesAndTagsToM4bAsync(CancellationToken cancellationToken);
+}
+
+internal class LocalAudioSynthesizer : IAudioSynthesizer
+{
+    private readonly SpeechSynthesizer _speechSynthesizer = new ();
+
+    public IEnumerable<VoiceInfo> GetVoices() => _speechSynthesizer.GetInstalledVoices().Select(voice => voice.VoiceInfo);
+
+    public Task<Stream> SynthesizeWavFromTextAsync(string name, string content, VoiceInfo voice, CancellationToken cancellationToken)
+    {
+        try
+        {
+            Program.Log($"Starting for {name}", ConsoleColor.Yellow);
+            var builder = new PromptBuilder(voice.Culture);
+            builder.AppendText(content);
+            _speechSynthesizer.SelectVoice(voice.Name);
+
+            var speechStream = new MemoryStream();
+            _speechSynthesizer.SetOutputToWaveStream(speechStream);
+            _speechSynthesizer.Speak(builder);
+            speechStream.Position = 0;
+
+            Program.Log($"Succeeded for {name}", ConsoleColor.Green);
+
+            return Task.FromResult<Stream>(speechStream);
+        }
+        catch (Exception ex)
+        {
+            Program.Log($"Failed for {name} with ex: {ex}", ConsoleColor.Red);
+            return Task.FromResult(Stream.Null);
+        }
+    }
 }
 
 internal class PlaywrightHtmlConverter : IHtmlConverter, IInitializer, IDisposable
@@ -172,6 +209,7 @@ internal class Program
         var htmlConverter = new PlaywrightHtmlConverter();
         await htmlConverter.InitializeAsync(cancellationToken);
         var bookParser = new VersOneEpubBookParser(htmlConverter);
+        var synthesizer = new LocalAudioSynthesizer();
         var book = await bookParser.ParseAsync(new FileInfo(input), cancellationToken);
 
         var outDir = Directory.CreateDirectory(Path.Join(output, book.FileName));
@@ -180,7 +218,9 @@ internal class Program
 
         foreach (var chapter in book.Chapters)
         {
-            await ConvertTextToAacAsync(chapter.FileName, chapter.Content, Path.Join(aacDir.FullName, $"{chapter.FileName}.aac"), language);
+            var voice = synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
+            using var stream = await synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, cancellationToken);
+            var result = await ConvertWavToAccAsync(stream, Path.Join(aacDir.FullName, $"{chapter.FileName}.aac"));
         }
 
         foreach (var image in book.Images)
@@ -204,34 +244,6 @@ internal class Program
 
         Log("Done", ConsoleColor.Green);
         Console.ReadLine();
-    }
-
-    private static async Task<bool> ConvertTextToAacAsync(string name, string content, string outputFile, string language)
-    {
-        try
-        {
-            Log($"Starting for {name}", ConsoleColor.Yellow);
-            var synth = new SpeechSynthesizer();
-            var voices = synth.GetInstalledVoices();
-            var voice = voices.Select(v => v.VoiceInfo).Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
-            var builder = new PromptBuilder(voice.Culture);
-            builder.AppendText(content);
-            synth.SelectVoice(voice.Name);
-
-            using var speechStream = new MemoryStream();
-            synth.SetOutputToWaveStream(speechStream);
-            synth.Speak(builder);
-            speechStream.Position = 0;
-            var result = await ConvertWavToAccAsync(speechStream, outputFile);
-
-            Log($"Succeeded for {name}", ConsoleColor.Green);
-            return result;
-        }
-        catch (Exception ex)
-        {
-            Log($"Failed for {name} with ex: {ex}", ConsoleColor.Red);
-            return false;
-        }
     }
 
     private static Task<bool> ConvertWavToAccAsync(Stream wavStream, string output)
@@ -306,7 +318,7 @@ internal class Program
         return Task.FromResult(true);
     }
 
-    static void Log(string message, ConsoleColor color)
+    internal static void Log(string message, ConsoleColor color)
     {
         var currentColor = Console.ForegroundColor;
         Console.ForegroundColor = color;
