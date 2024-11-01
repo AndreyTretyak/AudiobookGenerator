@@ -56,7 +56,20 @@ public interface IAudioConverter
 
     Task<Stream> CreateM4bAsync(IEnumerable<Stream> aacChapters, CancellationToken cancellationToken);
 
-    Task AddImagesAndTagsToM4bAsync(CancellationToken cancellationToken);
+    Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, CancellationToken cancellationToken);
+}
+
+public static class DirectoryInfoExtension
+{
+    public static string GetSubPath(this DirectoryInfo directoryInfo, string fileName) => Path.Combine(directoryInfo.FullName, fileName);
+
+    public static FileInfo GetSubFile(this DirectoryInfo directoryInfo, string fileName) => new FileInfo(directoryInfo.GetSubPath(fileName));
+
+    public static string GetFileInSameDir(this FileInfo fileInfo, string fileName)
+    {
+        _ = fileInfo.Directory ?? throw new InvalidOperationException($"Output directory for {fileInfo} not found.");
+        return fileInfo.Directory.GetSubPath(fileName);
+    }
 }
 
 internal class FfmpegAudioCopnverter : IInitializer
@@ -100,15 +113,9 @@ internal class FfmpegAudioCopnverter : IInitializer
 
     public async Task<FileInfo> CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, CancellationToken cancellationToken)
     {
-        var files = aacChapters.Select(f => f.FullName).ToArray();
+        var files = aacChapters.Select(f => f.FullName);
 
-        if (outputFile.Directory == null) 
-        {
-            throw new InvalidOperationException($"Output directory for {outputFile} not found.");
-        }
-        var outputDir = outputFile.Directory.FullName;
-
-        var chaptersFile = Path.Combine(outputDir, "chapters.txt");
+        var chaptersFile = outputFile.GetFileInSameDir("chapters.txt");
         using (StreamWriter stream = new StreamWriter(chaptersFile))
         {
             stream.WriteLine(";FFMETADATA1");
@@ -130,12 +137,10 @@ internal class FfmpegAudioCopnverter : IInitializer
             }
         }
 
-        var output = Path.Join(outputDir, outputFile.Name);
-
         await FFMpegArguments
             .FromConcatInput(files)
             .AddFileInput(chaptersFile)
-            .OutputToFile(output, true)
+            .OutputToFile(outputFile.FullName, true)
             .ProcessAsynchronously();
 
         return outputFile;
@@ -314,10 +319,13 @@ internal class Program
     static async Task Main()
     {
         // sample input
-        await RunAsync(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub", @"E:\Downloads\", "en-US");
+        await RunAsync(
+            new FileInfo(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub"),
+            new DirectoryInfo(@"E:\Downloads\"),
+            "en-US");
     }
 
-    static async Task RunAsync(string input, string output, string language = "en-US")
+    static async Task RunAsync(FileInfo input, DirectoryInfo output, string language)
     {
         CancellationToken cancellationToken = default;
         var htmlConverter = new PlaywrightHtmlConverter();
@@ -326,31 +334,30 @@ internal class Program
         await audioConverter.InitializeAsync(cancellationToken);
         var bookParser = new VersOneEpubBookParser(htmlConverter);
         var synthesizer = new LocalAudioSynthesizer();
-        var book = await bookParser.ParseAsync(new FileInfo(input), cancellationToken);
+        var book = await bookParser.ParseAsync(input, cancellationToken);
 
-        var outDir = Directory.CreateDirectory(Path.Join(output, book.FileName));
-        var aacDir = outDir.CreateSubdirectory("aac");
-        var imageDir = outDir.CreateSubdirectory("images");
+        var bookOutDir = output.CreateSubdirectory(book.FileName);
+        var aacDir = bookOutDir.CreateSubdirectory("aac");
+        var imageDir = bookOutDir.CreateSubdirectory("images");
 
         foreach (var chapter in book.Chapters)
         {
             var voice = synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
             using var stream = await synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, cancellationToken);
-            var chapterAacOutput = new FileInfo(Path.Join(aacDir.FullName, $"{chapter.FileName}.aac"));
+            
+            var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
             await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, cancellationToken);
         }
 
         foreach (var image in book.Images)
         {
-            var path = Path.Join(imageDir.FullName, image.FileName);
+            var path = imageDir.GetSubPath(image.FileName);
             Log($"Saving file {image.FileName}", ConsoleColor.Green);
             System.IO.File.WriteAllBytes(path, image.Content);
         }
 
         Log("Joining", ConsoleColor.Yellow);
-        var bookFileName = $"{book.FileName}.m4b";
-        var bookPath = Path.Combine(outDir.FullName, bookFileName);
-        var bookFile = new FileInfo(bookPath);
+        var bookFile = bookOutDir.GetSubFile($"{book.FileName}.m4b");
         await audioConverter.CreateM4bAsync(aacDir.GetFiles(), bookFile, cancellationToken);
         Log("Done joining", ConsoleColor.Green);
 
