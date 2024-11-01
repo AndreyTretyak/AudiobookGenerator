@@ -52,9 +52,9 @@ public interface IAudioSynthesizer
 
 public interface IAudioConverter
 {
-    Task<Stream> ConvertWavToAacAsync(Stream wavStream, CancellationToken cancellationToken);
+    Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, CancellationToken cancellationToken);
 
-    Task<Stream> CreateM4bAsync(IEnumerable<Stream> aacChapters, CancellationToken cancellationToken);
+    Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, CancellationToken cancellationToken);
 
     Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, CancellationToken cancellationToken);
 }
@@ -72,7 +72,7 @@ public static class DirectoryInfoExtension
     }
 }
 
-internal class FfmpegAudioCopnverter : IInitializer
+internal class FfmpegAudioCopnverter : IAudioConverter, IInitializer
 {
     public Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, CancellationToken cancellationToken)
     {
@@ -101,17 +101,15 @@ internal class FfmpegAudioCopnverter : IInitializer
         return Task.CompletedTask;
     }
 
-    public async Task<FileInfo> ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, CancellationToken cancellationToken)
+    public async Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, CancellationToken cancellationToken)
     {
         await FFMpegArguments
             .FromPipeInput(new StreamPipeSource(wavStream))
             .OutputToFile(outputFile.FullName, true, options => options.WithAudioCodec(AudioCodec.Aac))
             .ProcessAsynchronously();
-
-        return outputFile;
     }
 
-    public async Task<FileInfo> CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, CancellationToken cancellationToken)
+    public async Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, CancellationToken cancellationToken)
     {
         var files = aacChapters.Select(f => f.FullName);
 
@@ -142,8 +140,6 @@ internal class FfmpegAudioCopnverter : IInitializer
             .AddFileInput(chaptersFile)
             .OutputToFile(outputFile.FullName, true)
             .ProcessAsynchronously();
-
-        return outputFile;
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken)
@@ -314,26 +310,13 @@ internal class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
             imageFile.Content);
 }
 
-internal class Program
+internal class BookConverter(
+    IEpubBookParser bookParser,
+    IAudioSynthesizer synthesizer,
+    IAudioConverter audioConverter)
 {
-    static async Task Main()
+    public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken)
     {
-        // sample input
-        await RunAsync(
-            new FileInfo(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub"),
-            new DirectoryInfo(@"E:\Downloads\"),
-            "en-US");
-    }
-
-    static async Task RunAsync(FileInfo input, DirectoryInfo output, string language)
-    {
-        CancellationToken cancellationToken = default;
-        var htmlConverter = new PlaywrightHtmlConverter();
-        var audioConverter = new FfmpegAudioCopnverter();
-        await htmlConverter.InitializeAsync(cancellationToken);
-        await audioConverter.InitializeAsync(cancellationToken);
-        var bookParser = new VersOneEpubBookParser(htmlConverter);
-        var synthesizer = new LocalAudioSynthesizer();
         var book = await bookParser.ParseAsync(input, cancellationToken);
 
         var bookOutDir = output.CreateSubdirectory(book.FileName);
@@ -344,7 +327,7 @@ internal class Program
         {
             var voice = synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
             using var stream = await synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, cancellationToken);
-            
+
             var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
             await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, cancellationToken);
         }
@@ -352,21 +335,47 @@ internal class Program
         foreach (var image in book.Images)
         {
             var path = imageDir.GetSubPath(image.FileName);
-            Log($"Saving file {image.FileName}", ConsoleColor.Green);
+            Program.Log($"Saving file {image.FileName}", ConsoleColor.Green);
             System.IO.File.WriteAllBytes(path, image.Content);
         }
 
-        Log("Joining", ConsoleColor.Yellow);
+        Program.Log("Joining", ConsoleColor.Yellow);
         var bookFile = bookOutDir.GetSubFile($"{book.FileName}.m4b");
         await audioConverter.CreateM4bAsync(aacDir.GetFiles(), bookFile, cancellationToken);
-        Log("Done joining", ConsoleColor.Green);
+        Program.Log("Done joining", ConsoleColor.Green);
 
-        Log($"Adding cover image", ConsoleColor.Yellow);
+        Program.Log($"Adding cover image", ConsoleColor.Yellow);
         await audioConverter.AddImagesAndTagsToM4bAsync(bookFile, book, cancellationToken);
-        Log("Done adding cover", ConsoleColor.Green);
+        Program.Log("Done adding cover", ConsoleColor.Green);
 
-        Log("Done", ConsoleColor.Green);
+        Program.Log("Done", ConsoleColor.Green);
         Console.ReadLine();
+    }
+}
+
+internal class Program
+{
+    static async Task Main()
+    {
+        // sample input
+        await RunAsync(
+            new FileInfo(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub"),
+            new DirectoryInfo(@"E:\Downloads\"),
+            "en-US",
+            default(CancellationToken));
+    }
+
+    static async Task RunAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken)
+    {
+        var htmlConverter = new PlaywrightHtmlConverter();
+        var audioConverter = new FfmpegAudioCopnverter();
+        await htmlConverter.InitializeAsync(cancellationToken);
+        await audioConverter.InitializeAsync(cancellationToken);
+        var bookParser = new VersOneEpubBookParser(htmlConverter);
+        var synthesizer = new LocalAudioSynthesizer();
+        var converter = new BookConverter(bookParser, synthesizer, audioConverter);
+
+        await converter.ConvertAsync(input, output, language, cancellationToken);
     }
 
     internal static void Log(string message, ConsoleColor color)
