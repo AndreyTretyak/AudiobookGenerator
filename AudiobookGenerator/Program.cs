@@ -7,10 +7,8 @@ using Microsoft.Playwright;
 using TagLib;
 using VersOne.Epub;
 using VersOne.Epub.Options;
-using TagLib.IFD.Tags;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using System.Threading;
 using Microsoft.Extensions.Logging;
 
 namespace YewCone.AudiobookGenerator;
@@ -155,7 +153,7 @@ internal class FfmpegAudioCopnverter : IAudioConverter, IInitializer
     }
 }
 
-internal class LocalAudioSynthesizer : IAudioSynthesizer
+internal class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAudioSynthesizer
 {
     private readonly SpeechSynthesizer _speechSynthesizer = new ();
 
@@ -165,7 +163,7 @@ internal class LocalAudioSynthesizer : IAudioSynthesizer
     {
         try
         {
-            Program.Log($"Starting for {name}", ConsoleColor.Yellow);
+            logger.LogInformation($"Starting for {name}", ConsoleColor.Yellow);
             var builder = new PromptBuilder(voice.Culture);
             builder.AppendText(content);
             _speechSynthesizer.SelectVoice(voice.Name);
@@ -175,13 +173,13 @@ internal class LocalAudioSynthesizer : IAudioSynthesizer
             _speechSynthesizer.Speak(builder);
             speechStream.Position = 0;
 
-            Program.Log($"Succeeded for {name}", ConsoleColor.Green);
+            logger.LogInformation($"Succeeded for {name}", ConsoleColor.Green);
 
             return Task.FromResult<Stream>(speechStream);
         }
         catch (Exception ex)
         {
-            Program.Log($"Failed for {name} with ex: {ex}", ConsoleColor.Red);
+            logger.LogError($"Failed for {name} with ex: {ex}", ConsoleColor.Red);
             return Task.FromResult(Stream.Null);
         }
     }
@@ -313,7 +311,8 @@ internal class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
 internal class BookConverter(
     IEpubBookParser bookParser,
     IAudioSynthesizer synthesizer,
-    IAudioConverter audioConverter)
+    IAudioConverter audioConverter,
+    ILogger<BookConverter> logger)
 {
     public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken)
     {
@@ -335,21 +334,20 @@ internal class BookConverter(
         foreach (var image in book.Images)
         {
             var path = imageDir.GetSubPath(image.FileName);
-            Program.Log($"Saving file {image.FileName}", ConsoleColor.Green);
+            logger.LogInformation($"Saving file {image.FileName}", ConsoleColor.Green);
             System.IO.File.WriteAllBytes(path, image.Content);
         }
 
-        Program.Log("Joining", ConsoleColor.Yellow);
+        logger.LogInformation("Joining");
         var bookFile = bookOutDir.GetSubFile($"{book.FileName}.m4b");
         await audioConverter.CreateM4bAsync(aacDir.GetFiles(), bookFile, cancellationToken);
-        Program.Log("Done joining", ConsoleColor.Green);
+        logger.LogInformation("Done joining");
 
-        Program.Log($"Adding cover image", ConsoleColor.Yellow);
+        logger.LogInformation($"Adding cover image");
         await audioConverter.AddImagesAndTagsToM4bAsync(bookFile, book, cancellationToken);
-        Program.Log("Done adding cover", ConsoleColor.Green);
+        logger.LogInformation("Done adding cover");
 
-        Program.Log("Done", ConsoleColor.Green);
-        Console.ReadLine();
+        logger.LogInformation("Done");
     }
 }
 
@@ -386,13 +384,5 @@ internal class Program
             new DirectoryInfo(@"E:\Downloads\"),
             "en-US",
             cancelationToken);
-    }
-
-    internal static void Log(string message, ConsoleColor color)
-    {
-        var currentColor = Console.ForegroundColor;
-        Console.ForegroundColor = color;
-        Console.WriteLine(message);
-        Console.ForegroundColor = currentColor;
     }
 }
