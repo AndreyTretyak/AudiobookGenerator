@@ -7,13 +7,13 @@ using Microsoft.Playwright;
 using TagLib;
 using VersOne.Epub;
 using VersOne.Epub.Options;
-using System.Net.Http;
+using TagLib.IFD.Tags;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using System.Threading;
-using System.Xml.Linq;
-using System.Collections.Generic;
-using System.Collections;
-namespace YewCone.AudiobookGenerator;
+using Microsoft.Extensions.Logging;
 
+namespace YewCone.AudiobookGenerator;
 
 public readonly record struct BookChapter(string FileName, string Name, string Content);
 
@@ -355,27 +355,37 @@ internal class BookConverter(
 
 internal class Program
 {
-    static async Task Main()
+    static async Task Main(string[] args)
     {
+        var cancelationToken = CancellationToken.None;
+
+        var builder = Host.CreateApplicationBuilder(args);
+        builder.Services
+            .AddLogging(l => l.AddConsole())
+            .AddSingleton<PlaywrightHtmlConverter>()
+            .AddSingleton<FfmpegAudioCopnverter>()
+            .AddSingleton<IHtmlConverter>(sp => sp.GetRequiredService<PlaywrightHtmlConverter>())
+            .AddSingleton<IAudioConverter>(sp => sp.GetRequiredService<FfmpegAudioCopnverter>())
+            .AddSingleton<IEpubBookParser, VersOneEpubBookParser>()
+            .AddSingleton<IAudioSynthesizer, LocalAudioSynthesizer>()
+            .AddSingleton<BookConverter>()
+            .AddSingleton<IInitializer>(sp => sp.GetRequiredService<PlaywrightHtmlConverter>())
+            .AddSingleton<IInitializer>(sp => sp.GetRequiredService<FfmpegAudioCopnverter>());
+
+        //builder.Services.AddHostedService<Worker>();
+        //builder.Services.AddSingleton<IMessageWriter, MessageWriter>();
+        using IHost host = builder.Build();
+
+        var initializers = host.Services.GetRequiredService<IEnumerable<IInitializer>>().Select(initializer => initializer.InitializeAsync(cancelationToken));
+        await Task.WhenAll(initializers);
+
+        var converter = host.Services.GetRequiredService<BookConverter>();
         // sample input
-        await RunAsync(
+        await converter.ConvertAsync(
             new FileInfo(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub"),
             new DirectoryInfo(@"E:\Downloads\"),
             "en-US",
-            default(CancellationToken));
-    }
-
-    static async Task RunAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken)
-    {
-        var htmlConverter = new PlaywrightHtmlConverter();
-        var audioConverter = new FfmpegAudioCopnverter();
-        await htmlConverter.InitializeAsync(cancellationToken);
-        await audioConverter.InitializeAsync(cancellationToken);
-        var bookParser = new VersOneEpubBookParser(htmlConverter);
-        var synthesizer = new LocalAudioSynthesizer();
-        var converter = new BookConverter(bookParser, synthesizer, audioConverter);
-
-        await converter.ConvertAsync(input, output, language, cancellationToken);
+            cancelationToken);
     }
 
     internal static void Log(string message, ConsoleColor color)
