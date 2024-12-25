@@ -5,7 +5,68 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:YewCone.AudiobookGenerator.Wpf"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" MinHeight="450" MinWidth="400">
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <Button Content="Select Book..."/>
+            <TextBlock Text="Path to selected book.epub" />
+        </StackPanel>
+        <Expander Grid.Row="1" Header="Text Content" IsExpanded="True" >
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <ListBox Grid.Row="0" Grid.Column="0">
+                    <ListBoxItem>Chapter 1</ListBoxItem>
+                    <ListBoxItem>Chapter 2</ListBoxItem>
+                    <ListBoxItem>Chapter 3</ListBoxItem>
+                </ListBox>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="Chapter Content" />
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" >
+                    <TextBlock Text="Voice:"/>
+                    <ComboBox SelectedIndex="0" >
+                        <ComboBoxItem Content="Voice Name" />
+                    </ComboBox>
+                    <Button Content="Play" />
+                    <Button Content="Get More Voices..." />
+                </StackPanel>
+            </Grid>
+        </Expander>
+        <Expander Grid.Row="2" Header="Images" IsExpanded="True" >
+            <StackPanel>
+                <StackPanel Grid.Row="0" Orientation="Horizontal" >
+                    <TextBlock Text="Cover Image:"/>
+                    <ComboBox SelectedIndex="0" >
+                        <ComboBoxItem Content="Cover Image" />
+                    </ComboBox>
+                    <Button Content="Save Image As.." />
+                </StackPanel>
+                <Image Height="100" />
+            </StackPanel>
+        </Expander>
+        <Grid Grid.Row="3" >
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Button Grid.Row="0" Grid.Column="0" Content="Generate..." />
+            <ProgressBar Grid.Row="0" Grid.Column="1" IsIndeterminate="True" />
+            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="Logs"/>
+        </Grid>
     </Grid>
 </Window>
