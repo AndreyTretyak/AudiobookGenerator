@@ -8,7 +8,7 @@
         SizeToContent="Height"
         ResizeMode="CanResize"
         Width="800"
-        Title="Audiobook Generator">
+        Title="{x:Static local:Resources.AppName}">
     <Window.Resources>
         <Style TargetType="{x:Type Button}" BasedOn="{StaticResource DefaultButtonStyle}" >
             <Setter Property="VerticalAlignment" Value="Stretch" />
@@ -35,15 +35,15 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Book"/>
+            <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="{x:Static local:Resources.BookLable}"/>
             <Button Grid.Row="0" Grid.Column="1" Margin="5 0">
                 <TextBlock>
                 <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
-                <Run Text="Select Book ..." />
+                <Run Text="{x:Static local:Resources.SelectBookLable}" />
                 </TextBlock>
             </Button>
-            <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Center" Text="Please select ebook file" />
-            <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Text="Voice"/>
+            <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Center" Text="Please select ebook" />
+            <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Text="{x:Static local:Resources.VoiceLable}"/>
             <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="5 0" HorizontalAlignment="Stretch" SelectedIndex="0" >
                 <ComboBoxItem Content="Voice Name" />
             </ComboBox>
@@ -55,11 +55,17 @@
             </Button>
             <TextBlock Grid.Row="2" Grid.Column="4" Margin="5 0" VerticalAlignment="Center">
                 <Hyperlink>
-                    <Run Text="Need more voices?"/>
+                    <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
                 </Hyperlink>
             </TextBlock>
         </Grid>
-        <Expander Grid.Row="1" Header="Text Content (14 chapters)" IsExpanded="False" Margin="0 5" >
+        <Expander Grid.Row="1" IsExpanded="False" Margin="0 5" >
+            <Expander.Header>
+                <TextBlock>
+                    <Run Text="{x:Static local:Resources.TextContentSectionHeader}"/>
+                    <Run Text="{x:Static local:Resources.ChaptersLable}"/>
+                </TextBlock>
+            </Expander.Header>
             <StackPanel>
                 <DockPanel>
                     <ListBox>
@@ -67,28 +73,34 @@
                         <ListBoxItem>Chapter 2</ListBoxItem>
                         <ListBoxItem>Chapter 3</ListBoxItem>
                     </ListBox>
-                    <TextBlock Text="Chapter Content" />
+                    <TextBlock Text="Chapter Content" TextWrapping="Wrap" />
                 </DockPanel>
             </StackPanel>
         </Expander>
-        <Expander Grid.Row="2" Header="Images (5 images)" IsExpanded="False" Margin="0 5" >
-            <StackPanel>
-                <DockPanel Grid.Row="0">
-                    <TextBlock VerticalAlignment="Center" Text="Cover Image"/>
-                    <ComboBox SelectedIndex="0" >
-                        <ComboBoxItem Content="Cover Image" />
-                    </ComboBox>
-                    <Button >
+        <Expander Grid.Row="2" IsExpanded="False" Margin="0 5" >
+            <Expander.Header>
+                <TextBlock>
+                    <Run Text="{x:Static local:Resources.ImagesSectionHeader}"/>
+                    <Run Text="{x:Static local:Resources.ImagesLable}"/>
+                </TextBlock>
+            </Expander.Header>
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top">
+                    <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
+                    <Button DockPanel.Dock="Right" >
                         <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
-                            <Run Text="Save Image As.."/>
+                            <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
                         </TextBlock>
                     </Button>
+                    <ComboBox SelectedIndex="0" Margin="5 0" >
+                        <ComboBoxItem Content="{x:Static local:Resources.ChaptersLable}" />
+                    </ComboBox>
                 </DockPanel>
                 <Image Height="100" />
-            </StackPanel>
+            </DockPanel>
         </Expander>
-        <Expander Grid.Row="3" Header="Details" IsExpanded="False" Margin="0 5" >
+        <Expander Grid.Row="3" Header="{x:Static local:Resources.DetailsSectionHeader}" IsExpanded="False" Margin="0 5" >
             <DataGrid>
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Property" Width="*"/>
@@ -99,7 +111,7 @@
         <DockPanel Grid.Row="4" LastChildFill="True" Margin="0 5" >
             <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right">
                 <TextBlock>
-                    <Run Text="Generate" />
+                    <Run Text="{x:Static local:Resources.GenerateLable}" />
                     <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
                 </TextBlock>
             </Button>
