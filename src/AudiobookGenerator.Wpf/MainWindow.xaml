@@ -49,8 +49,8 @@
             </ComboBox>
             <Button Grid.Row="2" Grid.Column="3">
                 <TextBlock>
-                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE768;"/>
-                    <!--<Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE769;"/>-->
+                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE768;" ToolTip="{x:Static local:Resources.PlayTooltip}"/>
+                    <!--<Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE769;" ToolTip="{x:Static local:Resources.StopTooltip}"/>-->
                 </TextBlock>
             </Button>
             <TextBlock Grid.Row="2" Grid.Column="4" Margin="5 0" VerticalAlignment="Center">
@@ -63,7 +63,11 @@
             <Expander.Header>
                 <TextBlock>
                     <Run Text="{x:Static local:Resources.TextContentSectionHeader}"/>
-                    <Run Text="{x:Static local:Resources.ChaptersLable}"/>
+                    <Run>
+                        <Run.Text>
+                            <Binding Source="13" StringFormat="{x:Static local:Resources.ChaptersLable}" Mode="OneWay"/>
+                        </Run.Text>
+                    </Run>
                 </TextBlock>
             </Expander.Header>
             <StackPanel>
@@ -81,7 +85,11 @@
             <Expander.Header>
                 <TextBlock>
                     <Run Text="{x:Static local:Resources.ImagesSectionHeader}"/>
-                    <Run Text="{x:Static local:Resources.ImagesLable}"/>
+                    <Run>
+                        <Run.Text>
+                            <Binding Source="4" StringFormat="{x:Static local:Resources.ImagesLable}" Mode="OneWay"/>
+                        </Run.Text>
+                    </Run>
                 </TextBlock>
             </Expander.Header>
             <DockPanel>
