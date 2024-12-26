@@ -120,6 +120,9 @@
   <data name="AddVoiceLable" xml:space="preserve">
     <value>Need more voices?</value>
   </data>
+  <data name="AddVoiceLink" xml:space="preserve">
+    <value>https://support.microsoft.com/en-us/topic/download-languages-and-voices-for-immersive-reader-read-mode-and-read-aloud-4c83a8d8-7486-42f7-8e46-2b0fdf753130</value>
+  </data>
   <data name="AppName" xml:space="preserve">
     <value>Audiobook Generator</value>
   </data>

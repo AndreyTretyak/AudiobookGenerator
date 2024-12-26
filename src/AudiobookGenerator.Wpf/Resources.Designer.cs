@@ -70,6 +70,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to https://support.microsoft.com/en-us/topic/download-languages-and-voices-for-immersive-reader-read-mode-and-read-aloud-4c83a8d8-7486-42f7-8e46-2b0fdf753130.
+        /// </summary>
+        public static string AddVoiceLink {
+            get {
+                return ResourceManager.GetString("AddVoiceLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Audiobook Generator.
         /// </summary>
         public static string AppName {
