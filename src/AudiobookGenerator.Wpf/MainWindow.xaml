@@ -5,68 +5,106 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:YewCone.AudiobookGenerator.Wpf"
         mc:Ignorable="d"
-        Title="MainWindow" MinHeight="450" MinWidth="400">
-    <Grid>
+        SizeToContent="Height"
+        ResizeMode="CanResize"
+        Width="800"
+        Title="Audiobook Generator">
+    <Window.Resources>
+        <Style TargetType="{x:Type Button}" BasedOn="{StaticResource DefaultButtonStyle}" >
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+    </Window.Resources>
+    <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" Orientation="Horizontal">
-            <Button Content="Select Book..."/>
-            <TextBlock Text="Path to selected book.epub" />
-        </StackPanel>
-        <Expander Grid.Row="1" Header="Text Content" IsExpanded="True" >
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <ListBox Grid.Row="0" Grid.Column="0">
-                    <ListBoxItem>Chapter 1</ListBoxItem>
-                    <ListBoxItem>Chapter 2</ListBoxItem>
-                    <ListBoxItem>Chapter 3</ListBoxItem>
-                </ListBox>
-                <TextBlock Grid.Row="0" Grid.Column="1" Text="Chapter Content" />
-                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" >
-                    <TextBlock Text="Voice:"/>
-                    <ComboBox SelectedIndex="0" >
-                        <ComboBoxItem Content="Voice Name" />
-                    </ComboBox>
-                    <Button Content="Play" />
-                    <Button Content="Get More Voices..." />
-                </StackPanel>
-            </Grid>
-        </Expander>
-        <Expander Grid.Row="2" Header="Images" IsExpanded="True" >
+        <Grid Grid.Row="0" Margin="0 5">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="10"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Book"/>
+            <Button Grid.Row="0" Grid.Column="1" Margin="5 0">
+                <TextBlock>
+                <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
+                <Run Text="Select Book ..." />
+                </TextBlock>
+            </Button>
+            <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Center" Text="Please select ebook file" />
+            <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Text="Voice"/>
+            <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="5 0" HorizontalAlignment="Stretch" SelectedIndex="0" >
+                <ComboBoxItem Content="Voice Name" />
+            </ComboBox>
+            <Button Grid.Row="2" Grid.Column="3">
+                <TextBlock>
+                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE768;"/>
+                    <!--<Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE769;"/>-->
+                </TextBlock>
+            </Button>
+            <TextBlock Grid.Row="2" Grid.Column="4" Margin="5 0" VerticalAlignment="Center">
+                <Hyperlink>
+                    <Run Text="Need more voices?"/>
+                </Hyperlink>
+            </TextBlock>
+        </Grid>
+        <Expander Grid.Row="1" Header="Text Content (14 chapters)" IsExpanded="False" Margin="0 5" >
             <StackPanel>
-                <StackPanel Grid.Row="0" Orientation="Horizontal" >
-                    <TextBlock Text="Cover Image:"/>
+                <DockPanel>
+                    <ListBox>
+                        <ListBoxItem>Chapter 1</ListBoxItem>
+                        <ListBoxItem>Chapter 2</ListBoxItem>
+                        <ListBoxItem>Chapter 3</ListBoxItem>
+                    </ListBox>
+                    <TextBlock Text="Chapter Content" />
+                </DockPanel>
+            </StackPanel>
+        </Expander>
+        <Expander Grid.Row="2" Header="Images (5 images)" IsExpanded="False" Margin="0 5" >
+            <StackPanel>
+                <DockPanel Grid.Row="0">
+                    <TextBlock VerticalAlignment="Center" Text="Cover Image"/>
                     <ComboBox SelectedIndex="0" >
                         <ComboBoxItem Content="Cover Image" />
                     </ComboBox>
-                    <Button Content="Save Image As.." />
-                </StackPanel>
+                    <Button >
+                        <TextBlock>
+                            <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
+                            <Run Text="Save Image As.."/>
+                        </TextBlock>
+                    </Button>
+                </DockPanel>
                 <Image Height="100" />
             </StackPanel>
         </Expander>
-        <Grid Grid.Row="3" >
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <Button Grid.Row="0" Grid.Column="0" Content="Generate..." />
-            <ProgressBar Grid.Row="0" Grid.Column="1" IsIndeterminate="True" />
-            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="Logs"/>
-        </Grid>
+        <Expander Grid.Row="3" Header="Details" IsExpanded="False" Margin="0 5" >
+            <DataGrid>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Property" Width="*"/>
+                    <DataGridTextColumn Header="Value" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Expander>
+        <DockPanel Grid.Row="4" LastChildFill="True" Margin="0 5" >
+            <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right">
+                <TextBlock>
+                    <Run Text="Generate" />
+                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
+                </TextBlock>
+            </Button>
+            <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Margin="5" />
+            <TextBlock DockPanel.Dock="Bottom" Text="Logs"/>
+        </DockPanel>
     </Grid>
 </Window>
