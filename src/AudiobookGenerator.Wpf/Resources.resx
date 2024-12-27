@@ -153,6 +153,9 @@
   <data name="ImagesSectionHeader" xml:space="preserve">
     <value>Images</value>
   </data>
+  <data name="NoBookPathPlaceholder" xml:space="preserve">
+    <value>Please select ebook file</value>
+  </data>
   <data name="PlayTooltip" xml:space="preserve">
     <value>Play</value>
   </data>
