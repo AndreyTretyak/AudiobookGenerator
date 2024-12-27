@@ -117,6 +117,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="AddImageLable" xml:space="preserve">
+    <value>Add Image...</value>
+  </data>
   <data name="AddVoiceLable" xml:space="preserve">
     <value>Need more voices?</value>
   </data>
@@ -142,7 +145,7 @@
     <value>Details</value>
   </data>
   <data name="GenerateLable" xml:space="preserve">
-    <value>Generate</value>
+    <value>Generate Audiobook</value>
   </data>
   <data name="ImagesLable" xml:space="preserve">
     <value>({0} images)</value>

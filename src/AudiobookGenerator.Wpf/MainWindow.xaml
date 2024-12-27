@@ -97,6 +97,12 @@
                     <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
                     <Button DockPanel.Dock="Right" >
                         <TextBlock>
+                            <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
+                            <Run Text="{x:Static local:Resources.AddImageLable}"/>
+                        </TextBlock>
+                    </Button>
+                    <Button DockPanel.Dock="Right" >
+                        <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
                             <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
                         </TextBlock>

@@ -61,6 +61,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Add Image....
+        /// </summary>
+        public static string AddImageLable {
+            get {
+                return ResourceManager.GetString("AddImageLable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Need more voices?.
         /// </summary>
         public static string AddVoiceLable {
@@ -133,7 +142,7 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Generate.
+        ///   Looks up a localized string similar to Generate Audiobook.
         /// </summary>
         public static string GenerateLable {
             get {
