@@ -169,6 +169,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Please select ebook file.
+        /// </summary>
+        public static string NoBookPathPlaceholder {
+            get {
+                return ResourceManager.GetString("NoBookPathPlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Play.
         /// </summary>
         public static string PlayTooltip {

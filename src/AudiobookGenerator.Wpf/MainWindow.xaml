@@ -4,15 +4,23 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:YewCone.AudiobookGenerator.Wpf"
+        xmlns:viewModels="clr-namespace:YewCone.AudiobookGenerator.Wpf.ViewModels"
         mc:Ignorable="d"
         SizeToContent="Height"
         ResizeMode="CanResize"
         Width="800"
+        d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=True}"
         Title="{x:Static local:Resources.AppName}">
     <Window.Resources>
         <Style TargetType="{x:Type Button}" BasedOn="{StaticResource DefaultButtonStyle}" >
             <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
+        <DataTemplate DataType="{x:Type viewModels:ChapterViewModel}">
+            <TextBlock Text="{Binding Title}" />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:ImageViewModel}">
+            <TextBlock Text="{Binding Name}" />
+        </DataTemplate>
     </Window.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -36,101 +44,80 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="{x:Static local:Resources.BookLable}"/>
-            <Button Grid.Row="0" Grid.Column="1" Margin="5 0">
+            <Button Grid.Row="0" Grid.Column="1" Margin="5 0" Command="{Binding SelectBookCommand, Mode=OneTime}">
                 <TextBlock>
                 <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
                 <Run Text="{x:Static local:Resources.SelectBookLable}" />
                 </TextBlock>
             </Button>
-            <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Center" Text="Please select ebook" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Center"
+                Text="{x:Static local:Resources.BookPathPlaceholder}"/>
             <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Text="{x:Static local:Resources.VoiceLable}"/>
-            <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="5 0" HorizontalAlignment="Stretch" SelectedIndex="0" >
-                <ComboBoxItem Content="Voice Name" />
-            </ComboBox>
-            <Button Grid.Row="2" Grid.Column="3">
+            <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="5 0" HorizontalAlignment="Stretch"
+                ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
+            <Button Grid.Row="2" Grid.Column="3" Command="{Binding PlayOrStopCommand, Mode=OneTime}">
                 <TextBlock>
                     <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE768;" ToolTip="{x:Static local:Resources.PlayTooltip}"/>
                     <!--<Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE769;" ToolTip="{x:Static local:Resources.StopTooltip}"/>-->
                 </TextBlock>
             </Button>
             <TextBlock Grid.Row="2" Grid.Column="4" Margin="5 0" VerticalAlignment="Center">
-                <Hyperlink>
+                <Hyperlink NavigateUri="{Binding AddVoiceLink, Mode=OneTime}" >
                     <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
                 </Hyperlink>
             </TextBlock>
         </Grid>
-        <Expander Grid.Row="1" IsExpanded="False" Margin="0 5" >
-            <Expander.Header>
-                <TextBlock>
-                    <Run Text="{x:Static local:Resources.TextContentSectionHeader}"/>
-                    <Run>
-                        <Run.Text>
-                            <Binding Source="13" StringFormat="{x:Static local:Resources.ChaptersLable}" Mode="OneWay"/>
-                        </Run.Text>
-                    </Run>
-                </TextBlock>
-            </Expander.Header>
+        <Expander Grid.Row="1" IsExpanded="False" Margin="0 5"
+            IsEnabled="{Binding IsBookSelected, Mode=OneWay}"
+            Header="{Binding TextContentSectionHeader}">
             <StackPanel>
                 <DockPanel>
-                    <ListBox>
-                        <ListBoxItem>Chapter 1</ListBoxItem>
-                        <ListBoxItem>Chapter 2</ListBoxItem>
-                        <ListBoxItem>Chapter 3</ListBoxItem>
-                    </ListBox>
-                    <TextBlock Text="Chapter Content" TextWrapping="Wrap" />
+                    <ListBox ItemsSource="{Binding Book.Chapters}" SelectedItem="{Binding SelectedChapter}"/>
+                    <TextBlock Text="{Binding SelectedChapter.Content}" TextWrapping="Wrap" />
                 </DockPanel>
             </StackPanel>
         </Expander>
-        <Expander Grid.Row="2" IsExpanded="False" Margin="0 5" >
-            <Expander.Header>
-                <TextBlock>
-                    <Run Text="{x:Static local:Resources.ImagesSectionHeader}"/>
-                    <Run>
-                        <Run.Text>
-                            <Binding Source="4" StringFormat="{x:Static local:Resources.ImagesLable}" Mode="OneWay"/>
-                        </Run.Text>
-                    </Run>
-                </TextBlock>
-            </Expander.Header>
+        <Expander Grid.Row="2" IsExpanded="False" Margin="0 5"
+            IsEnabled="{Binding IsBookSelected, Mode=OneWay}"
+            Header="{Binding ImagesSectionHeader}">
             <DockPanel>
                 <DockPanel DockPanel.Dock="Top">
                     <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
-                    <Button DockPanel.Dock="Right" >
+                    <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
                         <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
                             <Run Text="{x:Static local:Resources.AddImageLable}"/>
                         </TextBlock>
                     </Button>
-                    <Button DockPanel.Dock="Right" >
+                    <Button DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
                         <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
                             <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
                         </TextBlock>
                     </Button>
-                    <ComboBox SelectedIndex="0" Margin="5 0" >
-                        <ComboBoxItem Content="{x:Static local:Resources.ChaptersLable}" />
-                    </ComboBox>
+                    <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover}"/>
                 </DockPanel>
-                <Image Height="100" />
+                <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" />
             </DockPanel>
         </Expander>
-        <Expander Grid.Row="3" Header="{x:Static local:Resources.DetailsSectionHeader}" IsExpanded="False" Margin="0 5" >
-            <DataGrid>
+        <Expander Grid.Row="3" Header="{x:Static local:Resources.DetailsSectionHeader}" IsExpanded="False" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
+            <DataGrid ItemsSource="{Binding Book.Properties, Mode=OneWay}" AutoGenerateColumns="False">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Property" Width="*"/>
-                    <DataGridTextColumn Header="Value" Width="*"/>
+                    <DataGridTextColumn Header="Property" Width="*" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" />
+                    <DataGridTextColumn Header="Value" Width="*" Binding="{Binding Value}"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Expander>
-        <DockPanel Grid.Row="4" LastChildFill="True" Margin="0 5" >
-            <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right">
+        <DockPanel Grid.Row="4" LastChildFill="True" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
+            <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right"
+                Command="{Binding GenerateCommand, Mode=OneTime}">
                 <TextBlock>
                     <Run Text="{x:Static local:Resources.GenerateLable}" />
                     <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
                 </TextBlock>
             </Button>
             <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Margin="5" />
-            <TextBlock DockPanel.Dock="Bottom" Text="Logs"/>
+            <ListView DockPanel.Dock="Bottom" ItemsSource="{Binding Logs, Mode=OneTime}"/>
         </DockPanel>
     </Grid>
 </Window>

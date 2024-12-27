@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using YewCone.AudiobookGenerator.Wpf.ViewModels;
 
 namespace YewCone.AudiobookGenerator.Wpf
 {
@@ -18,6 +19,7 @@ namespace YewCone.AudiobookGenerator.Wpf
     {
         public MainWindow()
         {
+            DataContext = new AudiobookGeneratorViewModel();
             InitializeComponent();
         }
     }
