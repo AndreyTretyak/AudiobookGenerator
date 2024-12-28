@@ -46,11 +46,11 @@ public static class AudioBookConverterDependencyInjectionExtensions
     }
 }
 
-internal readonly record struct BookChapter(string FileName, string Name, string Content);
+public readonly record struct BookChapter(string FileName, string Name, string Content);
 
-internal readonly record struct BookImage(string FileName, byte[] Content);
+public readonly record struct BookImage(string FileName, byte[] Content);
 
-internal readonly record struct Book(
+public readonly record struct Book(
     string FileName,
     string Title,
     string Description,
@@ -59,12 +59,12 @@ internal readonly record struct Book(
     BookChapter[] Chapters,
     BookImage[] Images);
 
-internal interface IEpubBookParser
+public interface IEpubBookParser
 {
     Task<Book> ParseAsync(FileInfo fileInfo, CancellationToken token);
 }
 
-internal interface IHtmlConverter
+public interface IHtmlConverter
 {
     Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
 }
@@ -218,7 +218,7 @@ internal class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IA
     }
 }
 
-internal class PlaywrightHtmlConverter : IHtmlConverter, IInitializer, IDisposable
+public class PlaywrightHtmlConverter : IHtmlConverter, IInitializer, IDisposable
 {
     private IPlaywright? _playwright;
     private IBrowser? _browser;
@@ -258,7 +258,7 @@ internal class PlaywrightHtmlConverter : IHtmlConverter, IInitializer, IDisposab
     public void Dispose() => _playwright?.Dispose();
 }
 
-internal class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
+public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
 {
     public EpubReaderOptions EpubReaderOptions { get; set; } = new EpubReaderOptions();
 
