@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Wpf.ViewModels;
 
@@ -111,13 +112,35 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     private void SelectBook(object? parameter)
     {
-        var images = Enumerable.Range(1, 5).Select(i => new ImageViewModel($"Image name {i}", []));
+        var dialog = new Microsoft.Win32.OpenFileDialog();
+        // dialog.FileName = "Document"; // Default file name
+        // dialog.DefaultExt = ".txt"; // Default file extension
+        dialog.Filter = "Electronic Publication Book (.epub)|*.epub";
+
+        bool? result = dialog.ShowDialog();
+
+        if (result != true)
+        {
+            return;
+        }
+
+        var file = new FileInfo(dialog.FileName);
+
+        var converter = new PlaywrightHtmlConverter();
+
+        converter.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+        var parser = new VersOneEpubBookParser(converter);
+
+        var book = parser.ParseAsync(file, CancellationToken.None).GetAwaiter().GetResult();
+
+        var images = book.Images.Select(i => new ImageViewModel(i.FileName, i.Content));
         Book = new BookViewModel(
-            new FileInfo("StubBookPath.epub"),
-            Enumerable.Range(1,5).Select(i => new PropertyViewModel($"Property {i}", $"Value {i}")),
-            Enumerable.Range(1, 13).Select(i => new ChapterViewModel($"Chapter {i}", $"Content {i}")),
+            file,
+            [],
+            book.Chapters.Select(c => new ChapterViewModel(c.Name, c.Content)),
             images,
-            images.Skip(1).First());
+            images.FirstOrDefault(i => i.Content.Equals(book.CoverImage)));
     }
 
     private void PlayOrStop(object? parameter)
@@ -159,7 +182,7 @@ internal class BookViewModel(FileInfo path,
     IEnumerable<PropertyViewModel> properties,
     IEnumerable<ChapterViewModel> chapters,
     IEnumerable<ImageViewModel> images,
-    ImageViewModel cover)
+    ImageViewModel? cover)
 {
     public FileInfo Path { get; } = path;
 
@@ -167,7 +190,7 @@ internal class BookViewModel(FileInfo path,
 
     public ObservableCollection<ImageViewModel> Images { get; } = new(images);
 
-    public ImageViewModel Cover { get; set; } = cover;
+    public ImageViewModel? Cover { get; set; } = cover;
 
     public ObservableCollection<PropertyViewModel> Properties { get; } = new(properties);
 }

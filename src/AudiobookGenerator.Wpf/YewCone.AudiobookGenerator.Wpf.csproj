@@ -4,9 +4,11 @@
     <TargetFramework>$(CurrentTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AudiobookGenerator.Core\YewCone.AudiobookGenerator.Core.csproj" />
+    <PackageReference Include="VersOne.Epub"/>
   </ItemGroup>
   <ItemGroup>
     <Compile Update="Resources.Designer.cs">
