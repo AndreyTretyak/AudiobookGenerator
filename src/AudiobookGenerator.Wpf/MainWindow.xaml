@@ -21,6 +21,7 @@
         <DataTemplate DataType="{x:Type viewModels:ImageViewModel}">
             <TextBlock Text="{Binding Name}" />
         </DataTemplate>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     </Window.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -46,23 +47,22 @@
             <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="{x:Static local:Resources.BookLable}"/>
             <Button Grid.Row="0" Grid.Column="1" Margin="5 0" Command="{Binding SelectBookCommand, Mode=OneTime}">
                 <TextBlock>
-                <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
-                <Run Text="{x:Static local:Resources.SelectBookLable}" />
+                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
+                    <Run Text="{x:Static local:Resources.SelectBookLable}" />
                 </TextBlock>
             </Button>
-            <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Center"
-                Text="{x:Static local:Resources.BookPathPlaceholder}"/>
+            <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Center" TextWrapping="Wrap"
+                Text="{Binding BookPath, Mode=OneWay}"/>
             <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Text="{x:Static local:Resources.VoiceLable}"/>
             <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="5 0" HorizontalAlignment="Stretch"
                 ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
             <Button Grid.Row="2" Grid.Column="3" Command="{Binding PlayOrStopCommand, Mode=OneTime}">
-                <TextBlock>
-                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE768;" ToolTip="{x:Static local:Resources.PlayTooltip}"/>
-                    <!--<Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE769;" ToolTip="{x:Static local:Resources.StopTooltip}"/>-->
-                </TextBlock>
+                <TextBlock FontFamily="{StaticResource SymbolThemeFontFamily}"
+                   Text="{Binding PlayStopIcon, Mode=OneWay}"
+                   ToolTip="{Binding PlayStopToolTip, Mode=OneWay}"/>
             </Button>
             <TextBlock Grid.Row="2" Grid.Column="4" Margin="5 0" VerticalAlignment="Center">
-                <Hyperlink NavigateUri="{Binding AddVoiceLink, Mode=OneTime}" >
+                <Hyperlink  NavigateUri="{Binding AddVoiceLink, Mode=OneTime}">
                     <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
                 </Hyperlink>
             </TextBlock>
@@ -73,7 +73,7 @@
             <StackPanel>
                 <DockPanel>
                     <ListBox ItemsSource="{Binding Book.Chapters}" SelectedItem="{Binding SelectedChapter}"/>
-                    <TextBlock Text="{Binding SelectedChapter.Content}" TextWrapping="Wrap" />
+                    <TextBox Text="{Binding SelectedChapter.Content, Mode=TwoWay}" TextWrapping="Wrap" />
                 </DockPanel>
             </StackPanel>
         </Expander>
@@ -116,8 +116,12 @@
                     <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
                 </TextBlock>
             </Button>
-            <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Margin="5" />
-            <ListView DockPanel.Dock="Bottom" ItemsSource="{Binding Logs, Mode=OneTime}"/>
+            <ProgressBar DockPanel.Dock="Right" Margin="5"
+                Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
+                IsIndeterminate="True" />
+            <ListView DockPanel.Dock="Bottom"
+                Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
+                ItemsSource="{Binding Logs, Mode=OneTime}"/>
         </DockPanel>
     </Grid>
 </Window>
