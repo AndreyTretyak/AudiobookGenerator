@@ -1,13 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
+using System.Speech.Synthesis;
+using System.Windows;
 using System.Windows.Input;
 using YewCone.AudiobookGenerator.Core;
 
@@ -42,11 +39,14 @@ internal class BaseViewModel : INotifyPropertyChanged
 
 internal class AudiobookGeneratorViewModel : BaseViewModel
 {
+    private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
+    private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
+    private readonly IAudioSynthesizer audioSynthesizer;
+
     private bool isGenerating;
     private bool isPlaying;
     private BookViewModel? book;
     private string? selectedVoice;
-    private ChapterViewModel? selectedChapter;
 
     public BookViewModel? Book { 
         get => book; 
@@ -68,9 +68,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public string? SelectedVoice { get => selectedVoice; set => SetAndRaise(ref selectedVoice, value, [], [PlayOrStopCommand, GenerateCommand]); }
 
-    public ChapterViewModel? SelectedChapter { get => selectedChapter; set => SetAndRaise(ref selectedChapter, value); }
-
-    public ObservableCollection<string> Voices { get; } = new();
+    public ObservableCollection<VoiceInfo> Voices { get; }
 
     public ObservableCollection<LogMessage> Logs { get; } = new();
 
@@ -94,28 +92,25 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public DelegateCommand GenerateCommand { get; }
 
-    public AudiobookGeneratorViewModel()
+    public AudiobookGeneratorViewModel(IAudioSynthesizer synthesizer)
     {
-        SelectBookCommand = new DelegateCommand(SelectBook);
-        PlayOrStopCommand = new DelegateCommand(PlayOrStop, parameter => this.IsVoiceSelected);
+        audioSynthesizer = synthesizer;
+        SelectBookCommand = new DelegateCommand(SelectBookAsync);
+        PlayOrStopCommand = new DelegateCommand(PlayOrStopAsync, parameter => this.IsVoiceSelected);
 
         Func<object?, bool> canExecuteWhenBookSelected = parameter => this.IsBookSelected;
-        SaveImageAsCommand = new DelegateCommand(SaveImageAs, canExecuteWhenBookSelected);
-        AddImageCommand = new DelegateCommand(AddImage, canExecuteWhenBookSelected);
+        SaveImageAsCommand = new DelegateCommand(SaveImageAsAsync, canExecuteWhenBookSelected);
+        AddImageCommand = new DelegateCommand(AddImageAsync, canExecuteWhenBookSelected);
 
-        GenerateCommand = new DelegateCommand(Generate, parameter => this.IsVoiceSelected && this.IsBookSelected);
+        GenerateCommand = new DelegateCommand(GenerateAsync, parameter => this.IsVoiceSelected && this.IsBookSelected);
 
-        Voices.Add("Test Voice 1");
-        Voices.Add(SelectedVoice = "Test Voice 2");
-        Voices.Add("Test Voice 3");
+        Voices = [..synthesizer.GetVoices()];
     }
 
-    private void SelectBook(object? parameter)
+    private async Task SelectBookAsync(object? parameter)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog();
-        // dialog.FileName = "Document"; // Default file name
-        // dialog.DefaultExt = ".txt"; // Default file extension
-        dialog.Filter = "Electronic Publication Book (.epub)|*.epub";
+        dialog.Filter = supportedBookFormatFilter;
 
         bool? result = dialog.ShowDialog();
 
@@ -128,22 +123,21 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var converter = new PlaywrightHtmlConverter();
 
-        converter.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
+        await converter.InitializeAsync(CancellationToken.None);
 
         var parser = new VersOneEpubBookParser(converter);
 
-        var book = parser.ParseAsync(file, CancellationToken.None).GetAwaiter().GetResult();
+        var book = await parser.ParseAsync(file, CancellationToken.None);
 
-        var images = book.Images.Select(i => new ImageViewModel(i.FileName, i.Content));
         Book = new BookViewModel(
             file,
             [],
-            book.Chapters.Select(c => new ChapterViewModel(c.Name, c.Content)),
-            images,
-            images.FirstOrDefault(i => i.Content.Equals(book.CoverImage)));
+            book.Chapters,
+            book.Images,
+            book.Images.FirstOrDefault(i => i.Content.Equals(book.CoverImage)));
     }
 
-    private void PlayOrStop(object? parameter)
+    private async Task PlayOrStopAsync(object? parameter)
     {
         if (SelectedVoice == null) 
         {
@@ -151,48 +145,96 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         }
 
         IsPlaying = !IsPlaying;
+
+        await Task.CompletedTask;
     }
 
-    private void SaveImageAs(object? parameter)
+    private async Task SaveImageAsAsync(object? parameter)
+    {
+        if (Book == null || Book.Cover == null)
+        {
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.SaveFileDialog();
+        
+        dialog.FileName = Book.Cover.FileName;
+        dialog.Filter = supportedImageFormatsFilter;
+        dialog.DefaultExt = Path.GetExtension(Book.Cover.FileName);
+
+        var result = dialog.ShowDialog();
+
+        if (result != true)
+        {
+            return;
+        }
+
+        await File.WriteAllBytesAsync(dialog.FileName, Book.Cover.Content);
+    }
+
+    private async Task AddImageAsync(object? parameter)
     {
         if (Book == null)
         {
             return;
         }
-    }
 
-    private void AddImage(object? parameter)
-    {
-        if (Book == null)
+        var dialog = new Microsoft.Win32.OpenFileDialog();
+        dialog.Filter = supportedImageFormatsFilter;
+
+        bool? result = dialog.ShowDialog();
+
+        if (result != true)
         {
             return;
         }
 
-        this.Book.Images.Add(new ImageViewModel("AddedImage", []));
+        var filename = dialog.FileName;
+        var content = await File.ReadAllBytesAsync(filename);
+        var image = new BookImage(Path.GetFileName(filename), content);
+
+        this.Book.Images.Add(image);
+        this.Book.Cover = image;
     }
 
-    private void Generate(object? parameter)
+    private async Task GenerateAsync(object? parameter)
     {
         IsGenerating = true;
-        Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith((t,p) => this.IsGenerating = false, null);
+        // TODO
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        IsGenerating = false;
     }
 }
 
-internal class BookViewModel(FileInfo path,
-    IEnumerable<PropertyViewModel> properties,
-    IEnumerable<ChapterViewModel> chapters,
-    IEnumerable<ImageViewModel> images,
-    ImageViewModel? cover)
+internal class BookViewModel : BaseViewModel
 {
-    public FileInfo Path { get; } = path;
+    private BookChapter? selectedChapter;
+    private BookImage? cover;
 
-    public ObservableCollection<ChapterViewModel> Chapters { get; } = new(chapters);
+    public BookViewModel(FileInfo path,
+        IEnumerable<PropertyViewModel> properties,
+        IEnumerable<BookChapter> chapters,
+        IEnumerable<BookImage> images,
+        BookImage? cover)
+    {
+        Path = path;
+        Chapters = [.. chapters];
+        Properties = [.. properties];
+        Images = [.. images];
+        selectedChapter = Chapters.FirstOrDefault();
+    }
 
-    public ObservableCollection<ImageViewModel> Images { get; } = new(images);
+    public FileInfo Path { get; }
 
-    public ImageViewModel? Cover { get; set; } = cover;
+    public ObservableCollection<BookChapter> Chapters { get; }
 
-    public ObservableCollection<PropertyViewModel> Properties { get; } = new(properties);
+    public ObservableCollection<PropertyViewModel> Properties { get; }
+
+    public ObservableCollection<BookImage> Images { get; }
+
+    public BookChapter? SelectedChapter { get => selectedChapter; set => SetAndRaise(ref selectedChapter, value); }
+
+    public BookImage? Cover { get => cover; set => SetAndRaise(ref cover, value); }
 }
 
 internal class ChapterViewModel(string title, string content)
@@ -209,17 +251,25 @@ internal class PropertyViewModel(string name, string value)
     public string Value { get; set; } = value;
 }
 
-internal record ImageViewModel(string Name, byte[] Content);
-
 internal record LogMessage(string Text, Color Color);
 
-internal class DelegateCommand(Action<object?> execute, Func<object?, bool>? canExecute = null) : ICommand
+internal class DelegateCommand(Func<object?, Task> execute, Func<object?, bool>? canExecute = null) : ICommand
 {
     public event EventHandler? CanExecuteChanged;
 
     public bool CanExecute(object? parameter) => canExecute?.Invoke(parameter) ?? true;
 
-    public void Execute(object? parameter) => execute(parameter);
+    public async void Execute(object? parameter)
+    {
+        try
+        {
+            await execute(parameter);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.ToString(), "Error", MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.None);
+        }
+    }
 
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
