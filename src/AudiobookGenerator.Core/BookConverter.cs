@@ -252,7 +252,7 @@ public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
         await page.EvaluateAsync(@"() => {
                 const images = document.querySelectorAll('img');
                 images.forEach(img => {
-                    const altText = 'book image:' + img.getAttribute('alt') + 'file name' + img.getAttribute('src');
+                    const altText = 'book image:' + img.getAttribute('alt') + ' file name ' + img.getAttribute('src')?.split('/').pop();
                     const textNode = document.createTextNode(altText);
                     img.parentNode.replaceChild(textNode, img);
                 });
