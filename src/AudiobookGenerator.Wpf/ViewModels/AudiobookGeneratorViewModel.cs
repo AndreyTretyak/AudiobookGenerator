@@ -41,7 +41,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 {
     private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
-    private const char authorsSeparator = ';';
+    private const char authorsSeparator = ',';
     private readonly IAudioSynthesizer audioSynthesizer;
     private readonly IEpubBookParser bookParser;
 
