@@ -42,6 +42,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
     private const char authorsSeparator = ',';
+    private const int coverComplarePresision = 10000;
     private readonly IAudioSynthesizer audioSynthesizer;
     private readonly IEpubBookParser bookParser;
 
@@ -140,7 +141,10 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             ],
             book.Chapters,
             book.Images,
-            book.Images.FirstOrDefault(i => i.Content.Equals(book.CoverImage)));
+            book.CoverImage != null 
+                ? book.Images.FirstOrDefault(i => Enumerable.SequenceEqual(i.Content.Take(coverComplarePresision), book.CoverImage.Take(coverComplarePresision)))
+                : null
+                    ?? book.Images.FirstOrDefault());
     }
 
     private Task PlayOrStopAsync(object? parameter)
