@@ -141,11 +141,11 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             book.Images.FirstOrDefault(i => i.Content.Equals(book.CoverImage)));
     }
 
-    private async Task PlayOrStopAsync(object? parameter)
+    private Task PlayOrStopAsync(object? parameter)
     {
         if (this.SelectedVoice == null || this.Book == null || this.Book.SelectedChapter == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         IsPlaying = !IsPlaying;
@@ -159,7 +159,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             audioSynthesizer.StopSpeeking();
         }
 
-            await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     private async Task SaveImageAsAsync(object? parameter)
@@ -231,12 +231,13 @@ internal class BookViewModel : BaseViewModel
         IEnumerable<PropertyViewModel> properties,
         IEnumerable<BookChapter> chapters,
         IEnumerable<BookImage> images,
-        BookImage? cover)
+        BookImage? bookCover)
     {
         Path = path;
         Chapters = [.. chapters];
         Properties = [.. properties];
         Images = [.. images];
+        cover = bookCover;
         selectedChapter = Chapters.FirstOrDefault();
     }
 
