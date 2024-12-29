@@ -46,9 +46,9 @@ public static class AudioBookConverterDependencyInjectionExtensions
     }
 }
 
-public readonly record struct BookChapter(string FileName, string Name, string Content);
+public record BookChapter(string FileName, string Name, string Content);
 
-public readonly record struct BookImage(string FileName, byte[] Content);
+public record BookImage(string FileName, byte[] Content);
 
 public readonly record struct Book(
     string FileName,
@@ -74,7 +74,7 @@ internal interface IInitializer
     Task InitializeAsync(CancellationToken cancellationToken);
 }
 
-internal interface IAudioSynthesizer
+public interface IAudioSynthesizer
 {
     IEnumerable<VoiceInfo> GetVoices();
 
@@ -186,7 +186,7 @@ internal class FfmpegAudioCopnverter : IAudioConverter, IInitializer
     }
 }
 
-internal class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAudioSynthesizer
+public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAudioSynthesizer
 {
     private readonly SpeechSynthesizer _speechSynthesizer = new();
 
