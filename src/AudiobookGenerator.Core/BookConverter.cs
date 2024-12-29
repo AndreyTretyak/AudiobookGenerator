@@ -12,37 +12,16 @@ using Microsoft.Extensions.Logging;
 
 namespace YewCone.AudiobookGenerator.Core;
 
-public interface IBookConverter
-{
-    Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken);
-}
-
-public interface IBookConverterProvider
-{
-    Task<IBookConverter> GetConverterAsync(CancellationToken cancellationToken);
-}
-
 public static class AudioBookConverterDependencyInjectionExtensions
 {
     public static IServiceCollection AddBookConverter(this IServiceCollection services)
     {
         return services
-            .AddWithIntitalizer<IAudioConverter, FfmpegAudioCopnverter>()
+            .AddSingleton<IAudioConverter, FfmpegAudioCopnverter>()
             .AddSingleton<IHtmlConverter, PlaywrightHtmlConverter>()
             .AddSingleton<IEpubBookParser, VersOneEpubBookParser>()
             .AddSingleton<IAudioSynthesizer, LocalAudioSynthesizer>()
-            .AddSingleton<BookConverter>()
-            .AddSingleton<IBookConverterProvider, BookConverterProvider>();
-    }
-
-    internal static IServiceCollection AddWithIntitalizer<TService, TImplementation>(this IServiceCollection services)
-        where TImplementation : class, IInitializer, TService
-        where TService : class
-    {
-        return services
-            .AddSingleton<TImplementation>()
-            .AddSingleton<TService>(sp => sp.GetRequiredService<TImplementation>())
-            .AddSingleton<IInitializer>(sp => sp.GetRequiredService<TImplementation>());
+            .AddSingleton<BookConverter>();
     }
 }
 
@@ -69,11 +48,6 @@ public interface IHtmlConverter
     Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
 }
 
-internal interface IInitializer
-{
-    Task InitializeAsync(CancellationToken cancellationToken);
-}
-
 public interface IAudioSynthesizer
 {
     IEnumerable<VoiceInfo> GetVoices();
@@ -85,7 +59,7 @@ public interface IAudioSynthesizer
     Task<Stream> SynthesizeWavFromTextAsync(string name, string content, VoiceInfo voice, CancellationToken cancellationToken);
 }
 
-internal interface IAudioConverter
+public interface IAudioConverter
 {
     Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, CancellationToken cancellationToken);
 
@@ -107,8 +81,10 @@ internal static class DirectoryInfoExtension
     }
 }
 
-internal class FfmpegAudioCopnverter : IAudioConverter, IInitializer
+internal class FfmpegAudioCopnverter : IAudioConverter
 {
+    private Task?  initializeTask;
+
     public Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, CancellationToken cancellationToken)
     {
         static Picture ByteToPicture(byte[] bytes) => new Picture(new ByteVector(bytes));
@@ -138,10 +114,12 @@ internal class FfmpegAudioCopnverter : IAudioConverter, IInitializer
 
     public async Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, CancellationToken cancellationToken)
     {
+        await EnsureInitizedAsync(cancellationToken).ConfigureAwait(false);
         await FFMpegArguments
             .FromPipeInput(new StreamPipeSource(wavStream))
             .OutputToFile(outputFile.FullName, true, options => options.WithAudioCodec(AudioCodec.Aac))
-            .ProcessAsynchronously();
+            .ProcessAsynchronously()
+            .ConfigureAwait(false);
     }
 
     public async Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, CancellationToken cancellationToken)
@@ -170,11 +148,13 @@ internal class FfmpegAudioCopnverter : IAudioConverter, IInitializer
             }
         }
 
+        await EnsureInitizedAsync(cancellationToken).ConfigureAwait(false);
         await FFMpegArguments
             .FromConcatInput(files)
             .AddFileInput(chaptersFile)
             .OutputToFile(outputFile.FullName, true)
-            .ProcessAsynchronously();
+            .ProcessAsynchronously()
+            .ConfigureAwait(false);
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken)
@@ -188,6 +168,8 @@ internal class FfmpegAudioCopnverter : IAudioConverter, IInitializer
         process.Start();
         return process.WaitForExitAsync(cancellationToken);
     }
+
+    private Task EnsureInitizedAsync(CancellationToken cancellationToken) => initializeTask ?? InitializeAsync(cancellationToken);
 }
 
 public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAudioSynthesizer
@@ -314,11 +296,11 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
             imageFile.Content);
 }
 
-internal class BookConverter(
+public class BookConverter(
     IEpubBookParser bookParser,
     IAudioSynthesizer synthesizer,
     IAudioConverter audioConverter,
-    ILogger<BookConverter> logger) : IBookConverter
+    ILogger<BookConverter> logger)
 {
     public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken)
     {
@@ -354,17 +336,5 @@ internal class BookConverter(
         logger.LogInformation("Done adding cover");
 
         logger.LogInformation("Done");
-    }
-}
-
-internal class BookConverterProvider(IEnumerable<IInitializer> initializers, BookConverter converter) : IBookConverterProvider
-{
-    private Task? initTask;
-
-    public async Task<IBookConverter> GetConverterAsync(CancellationToken cancellationToken)
-    {
-        initTask ??= Task.WhenAll(initializers.Select(initializer => initializer.InitializeAsync(cancellationToken)));
-        await initTask.ConfigureAwait(false);
-        return converter;
     }
 }

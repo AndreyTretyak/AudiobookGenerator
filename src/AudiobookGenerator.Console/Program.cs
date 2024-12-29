@@ -18,13 +18,12 @@ internal class Program
 
         using IHost host = builder.Build();
 
-        var converter = await host.Services.GetRequiredService<IBookConverterProvider>().GetConverterAsync(cancelationToken);
-
         // sample input
-        await converter.ConvertAsync(
-            new FileInfo(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub"),
-            new DirectoryInfo(@"E:\Downloads\"),
-            "en-US",
-            cancelationToken);
+        await host.Services.GetRequiredService<BookConverter>()
+            .ConvertAsync(
+                new FileInfo(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub"),
+                new DirectoryInfo(@"E:\Downloads\"),
+                "en-US",
+                cancelationToken);
     }
 }
