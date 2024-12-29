@@ -9,6 +9,7 @@ using VersOne.Epub;
 using VersOne.Epub.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Text.RegularExpressions;
 
 namespace YewCone.AudiobookGenerator.Core;
 
@@ -238,16 +239,26 @@ public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
 
         var page = await browser.NewPageAsync().ConfigureAwait(false);
 
+        // having title as single tag breacks parser so adding a hack here
+        // TODO: it would be nice to have nicer workaround.
+        var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
+        if (selfClosingRegex.IsMatch(htmlContent))
+        {
+            htmlContent = selfClosingRegex.Replace(htmlContent, "<title></title>");
+        }
+
         await page.SetContentAsync(htmlContent).ConfigureAwait(false);
 
         await page.EvaluateAsync(@"() => {
                 const images = document.querySelectorAll('img');
                 images.forEach(img => {
-                    const altText = 'book image:' + img.getAttribute('alt');
+                    const altText = 'book image:' + img.getAttribute('alt') + 'file name' + img.getAttribute('src');
                     const textNode = document.createTextNode(altText);
                     img.parentNode.replaceChild(textNode, img);
                 });
             }");
+
+        var pageText = await page.EvaluateAsync(@"() => document.body.innerText");
 
         var title = await page.InnerTextAsync("title").ConfigureAwait(false);
         var content = await page.InnerTextAsync("body").ConfigureAwait(false);
@@ -265,7 +276,22 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
     {
         var stream = fileInfo.OpenRead();
         var book = EpubReader.ReadBook(stream, EpubReaderOptions);
-        var convertTask = book.ReadingOrder.Select(chapter => ChapterToPlainTextAsync(chapter, cancellationToken));
+
+        var chapters = book.ReadingOrder.Select(c => new Chapter("", c.Content, c.FilePath));
+
+        // alternatives for getting content (so far look worth)
+
+        //var chapters = book.Content.Html.Local.Select(c => new Chapter("", c.Content, c.FilePath));
+
+        //var chapters = book.Navigation!.Select(c =>
+        //        c.HtmlContentFile == null
+        //            ? Chapter.Empty
+        //            : new Chapter(c.Title, c.HtmlContentFile.Content, c.HtmlContentFile.FilePath));
+
+        var convertTask = chapters
+            .Where(chapters => !string.IsNullOrWhiteSpace(chapters.Content))
+            .Select(chapter => ChapterToPlainTextAsync(chapter, cancellationToken));
+
         var plainTextChapters = await Task.WhenAll(convertTask).ConfigureAwait(false);
         return new Book(
             Path.GetFileNameWithoutExtension(fileInfo.Name),
@@ -277,16 +303,22 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
             book.Content.Images.Local.Select(ConvertImage).ToArray());
     }
 
-    private async Task<(string Title, string Content)> ChapterToPlainTextAsync(EpubLocalTextContentFile chapter, CancellationToken cancellationToken)
+    private async Task<Chapter> ChapterToPlainTextAsync(Chapter chapter, CancellationToken cancellationToken)
     {
-        var (title, content) = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
-        title = string.IsNullOrEmpty(title) ? Path.GetFileNameWithoutExtension(chapter.FilePath) : title;
-        return (title, content);
+        var (parsedTitle, content) = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
+        var fileName = Path.GetFileNameWithoutExtension(chapter.FileName);
+        var title = string.IsNullOrEmpty(chapter.Title)
+            ? string.IsNullOrEmpty(parsedTitle) 
+                ? fileName
+                : parsedTitle
+            : chapter.Title;
+
+        return new Chapter(title, content, fileName);
     }
 
-    private static BookChapter ConvertChapter((string Title, string Content) chapter, int index) =>
+    private static BookChapter ConvertChapter(Chapter chapter, int index) =>
         new BookChapter(
-            $"{(index + 1):0000} {chapter.Title}",
+            $"{(index + 1):0000} {chapter.FileName}",
             chapter.Title,
             chapter.Content);
 
@@ -294,6 +326,11 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
         new BookImage(
             $"{(index + 1):0000} {Path.GetFileName(imageFile.FilePath)}",
             imageFile.Content);
+
+    private readonly record struct Chapter(string Title, string Content, string FileName)
+    {
+        public static Chapter Empty = new Chapter("", "", "");
+    }
 }
 
 public class BookConverter(

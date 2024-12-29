@@ -127,7 +127,9 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var file = new FileInfo(dialog.FileName);
 
+        Mouse.OverrideCursor = Cursors.Wait;
         var book = await bookParser.ParseAsync(file, CancellationToken.None);
+        Mouse.OverrideCursor = null;
 
         Book = new BookViewModel(
             file,
