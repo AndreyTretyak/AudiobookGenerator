@@ -21,8 +21,9 @@ namespace YewCone.AudiobookGenerator.Wpf
     {
         public MainWindow()
         {
+            var parser = new VersOneEpubBookParser(new PlaywrightHtmlConverter());
             var synthesizer = new LocalAudioSynthesizer(new NullLogger<LocalAudioSynthesizer>());
-            DataContext = new AudiobookGeneratorViewModel(synthesizer);
+            DataContext = new AudiobookGeneratorViewModel(parser, synthesizer);
             InitializeComponent();
         }
     }
