@@ -169,7 +169,7 @@ internal class FfmpegAudioCopnverter : IAudioConverter
         return process.WaitForExitAsync(cancellationToken);
     }
 
-    private Task EnsureInitizedAsync(CancellationToken cancellationToken) => initializeTask ?? InitializeAsync(cancellationToken);
+    private Task EnsureInitizedAsync(CancellationToken cancellationToken) => initializeTask ??= InitializeAsync(cancellationToken);
 }
 
 public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAudioSynthesizer
