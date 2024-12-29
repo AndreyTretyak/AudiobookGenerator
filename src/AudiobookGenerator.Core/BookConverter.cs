@@ -27,8 +27,8 @@ public static class AudioBookConverterDependencyInjectionExtensions
     public static IServiceCollection AddBookConverter(this IServiceCollection services)
     {
         return services
-            .AddWithIntitalizer<IHtmlConverter, PlaywrightHtmlConverter>()
             .AddWithIntitalizer<IAudioConverter, FfmpegAudioCopnverter>()
+            .AddSingleton<IHtmlConverter, PlaywrightHtmlConverter>()
             .AddSingleton<IEpubBookParser, VersOneEpubBookParser>()
             .AddSingleton<IAudioSynthesizer, LocalAudioSynthesizer>()
             .AddSingleton<BookConverter>()
@@ -77,6 +77,10 @@ internal interface IInitializer
 public interface IAudioSynthesizer
 {
     IEnumerable<VoiceInfo> GetVoices();
+
+    void Speek(string text, VoiceInfo voice);
+
+    void StopSpeeking();
 
     Task<Stream> SynthesizeWavFromTextAsync(string name, string content, VoiceInfo voice, CancellationToken cancellationToken);
 }
@@ -192,6 +196,17 @@ public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAud
 
     public IEnumerable<VoiceInfo> GetVoices() => _speechSynthesizer.GetInstalledVoices().Select(voice => voice.VoiceInfo);
 
+    public void Speek(string text, VoiceInfo voice)
+    {
+        var builder = new PromptBuilder(voice.Culture);
+        builder.AppendText(text);
+        _speechSynthesizer.SelectVoice(voice.Name);
+        _speechSynthesizer.SpeakAsyncCancelAll();
+        _speechSynthesizer.SpeakAsync(builder);
+    }
+
+    public void StopSpeeking() => _speechSynthesizer.SpeakAsyncCancelAll();
+
     public Task<Stream> SynthesizeWavFromTextAsync(string name, string content, VoiceInfo voice, CancellationToken cancellationToken)
     {
         try
@@ -218,26 +233,28 @@ public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAud
     }
 }
 
-public class PlaywrightHtmlConverter : IHtmlConverter, IInitializer, IDisposable
+public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
 {
     private IPlaywright? _playwright;
     private IBrowser? _browser;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken)
+    private async Task<IBrowser> InitializeAsync(CancellationToken cancellationToken)
     {
-        Microsoft.Playwright.Program.Main(["install"]);
-        _playwright = await Playwright.CreateAsync().ConfigureAwait(false);
-        _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true }).ConfigureAwait(false);
+        if (_browser == null)
+        {
+            Microsoft.Playwright.Program.Main(["install"]);
+            _playwright = await Playwright.CreateAsync().ConfigureAwait(false);
+            _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true }).ConfigureAwait(false);
+        }
+
+        return _browser;
     }
 
     public async Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
     {
-        if (_browser == null)
-        {
-            throw new InvalidOperationException($"{nameof(InitializeAsync)} should be called before using this method");
-        }
+        var browser = await InitializeAsync(cancellationToken).ConfigureAwait(false);
 
-        var page = await _browser.NewPageAsync().ConfigureAwait(false);
+        var page = await browser.NewPageAsync().ConfigureAwait(false);
 
         await page.SetContentAsync(htmlContent).ConfigureAwait(false);
 

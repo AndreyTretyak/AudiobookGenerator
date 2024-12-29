@@ -42,19 +42,20 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
     private readonly IAudioSynthesizer audioSynthesizer;
+    private readonly IEpubBookParser bookParser;
 
     private bool isGenerating;
     private bool isPlaying;
     private BookViewModel? book;
-    private string? selectedVoice;
+    private VoiceInfo? selectedVoice;
 
-    public BookViewModel? Book { 
+    public BookViewModel? Book {
         get => book; 
         private set => SetAndRaise(
             ref book,
             value,
             [nameof(IsBookSelected), nameof(TextContentSectionHeader), nameof(ImagesSectionHeader), nameof(BookPath)],
-            [SaveImageAsCommand, AddImageCommand, GenerateCommand]); }
+            [SaveImageAsCommand, AddImageCommand, PlayOrStopCommand, GenerateCommand]); }
 
     public bool IsGenerating { get => isGenerating; private set => SetAndRaise(ref isGenerating, value); }
 
@@ -66,7 +67,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public string PlayStopToolTip { get => isPlaying ? Resources.StopToolTip : Resources.PlayTooltip; }
 
-    public string? SelectedVoice { get => selectedVoice; set => SetAndRaise(ref selectedVoice, value, [], [PlayOrStopCommand, GenerateCommand]); }
+    public VoiceInfo? SelectedVoice { get => selectedVoice; set => SetAndRaise(ref selectedVoice, value, [], [PlayOrStopCommand, GenerateCommand]); }
 
     public ObservableCollection<VoiceInfo> Voices { get; }
 
@@ -92,11 +93,13 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public DelegateCommand GenerateCommand { get; }
 
-    public AudiobookGeneratorViewModel(IAudioSynthesizer synthesizer)
+    public AudiobookGeneratorViewModel(IEpubBookParser parser, IAudioSynthesizer synthesizer)
     {
+        bookParser = parser;
         audioSynthesizer = synthesizer;
+
         SelectBookCommand = new DelegateCommand(SelectBookAsync);
-        PlayOrStopCommand = new DelegateCommand(PlayOrStopAsync, parameter => this.IsVoiceSelected);
+        PlayOrStopCommand = new DelegateCommand(PlayOrStopAsync, parameter => this.IsVoiceSelected && this.Book != null && this.Book.SelectedChapter != null);
 
         Func<object?, bool> canExecuteWhenBookSelected = parameter => this.IsBookSelected;
         SaveImageAsCommand = new DelegateCommand(SaveImageAsAsync, canExecuteWhenBookSelected);
@@ -104,13 +107,15 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         GenerateCommand = new DelegateCommand(GenerateAsync, parameter => this.IsVoiceSelected && this.IsBookSelected);
 
-        Voices = [..synthesizer.GetVoices()];
+        Voices = [.. audioSynthesizer.GetVoices()];
     }
 
     private async Task SelectBookAsync(object? parameter)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog();
-        dialog.Filter = supportedBookFormatFilter;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = supportedBookFormatFilter
+        };
 
         bool? result = dialog.ShowDialog();
 
@@ -121,13 +126,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var file = new FileInfo(dialog.FileName);
 
-        var converter = new PlaywrightHtmlConverter();
-
-        await converter.InitializeAsync(CancellationToken.None);
-
-        var parser = new VersOneEpubBookParser(converter);
-
-        var book = await parser.ParseAsync(file, CancellationToken.None);
+        var book = await bookParser.ParseAsync(file, CancellationToken.None);
 
         Book = new BookViewModel(
             file,
@@ -139,14 +138,23 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     private async Task PlayOrStopAsync(object? parameter)
     {
-        if (SelectedVoice == null) 
+        if (this.SelectedVoice == null || this.Book == null || this.Book.SelectedChapter == null)
         {
             return;
         }
 
         IsPlaying = !IsPlaying;
 
-        await Task.CompletedTask;
+        if (IsPlaying)
+        {
+            audioSynthesizer.Speek(Book.SelectedChapter.Content, SelectedVoice);
+        }
+        else 
+        {
+            audioSynthesizer.StopSpeeking();
+        }
+
+            await Task.CompletedTask;
     }
 
     private async Task SaveImageAsAsync(object? parameter)
@@ -156,11 +164,12 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             return;
         }
 
-        var dialog = new Microsoft.Win32.SaveFileDialog();
-        
-        dialog.FileName = Book.Cover.FileName;
-        dialog.Filter = supportedImageFormatsFilter;
-        dialog.DefaultExt = Path.GetExtension(Book.Cover.FileName);
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = Book.Cover.FileName,
+            Filter = supportedImageFormatsFilter,
+            DefaultExt = Path.GetExtension(Book.Cover.FileName)
+        };
 
         var result = dialog.ShowDialog();
 
@@ -179,8 +188,10 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             return;
         }
 
-        var dialog = new Microsoft.Win32.OpenFileDialog();
-        dialog.Filter = supportedImageFormatsFilter;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = supportedImageFormatsFilter
+        };
 
         bool? result = dialog.ShowDialog();
 
