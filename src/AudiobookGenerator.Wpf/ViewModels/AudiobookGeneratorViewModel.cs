@@ -41,6 +41,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 {
     private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
+    private const char authorsSeparator = ';';
     private readonly IAudioSynthesizer audioSynthesizer;
     private readonly IEpubBookParser bookParser;
 
@@ -130,7 +131,11 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         Book = new BookViewModel(
             file,
-            [],
+            [
+                new PropertyViewModel(BookPropertyType.Title, book.Title),
+                new PropertyViewModel(BookPropertyType.Description, book.Description),
+                new PropertyViewModel(BookPropertyType.Authors, string.Join(authorsSeparator, book.AuthorList)),
+            ],
             book.Chapters,
             book.Images,
             book.Images.FirstOrDefault(i => i.Content.Equals(book.CoverImage)));
@@ -255,11 +260,15 @@ internal class ChapterViewModel(string title, string content)
     public string Content { get; set; } = content;
 }
 
-internal class PropertyViewModel(string name, string value)
+internal record PropertyViewModel(BookPropertyType Type, string Value)
 {
-    public string Name { get; } = name;
-
-    public string Value { get; set; } = value;
+    public string Name => Type switch
+        {
+            BookPropertyType.Title => Resources.TitleProperty,
+            BookPropertyType.Description => Resources.DescriptionProperty,
+            BookPropertyType.Authors => Resources.AuthorsProperties,
+            _ => Type.ToString()
+        };
 }
 
 internal record LogMessage(string Text, Color Color);
@@ -283,4 +292,11 @@ internal class DelegateCommand(Func<object?, Task> execute, Func<object?, bool>?
     }
 
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
+
+internal enum BookPropertyType
+{
+    Title,
+    Description,
+    Authors
 }

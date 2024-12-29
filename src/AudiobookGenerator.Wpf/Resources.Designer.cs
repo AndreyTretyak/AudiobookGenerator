@@ -97,6 +97,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Authors.
+        /// </summary>
+        public static string AuthorsProperties {
+            get {
+                return ResourceManager.GetString("AuthorsProperties", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Book.
         /// </summary>
         public static string BookLable {
@@ -129,6 +138,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         public static string CoverImageLable {
             get {
                 return ResourceManager.GetString("CoverImageLable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Description.
+        /// </summary>
+        public static string DescriptionProperty {
+            get {
+                return ResourceManager.GetString("DescriptionProperty", resourceCulture);
             }
         }
         
@@ -219,6 +237,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         public static string TextContentSectionHeader {
             get {
                 return ResourceManager.GetString("TextContentSectionHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Book Title.
+        /// </summary>
+        public static string TitleProperty {
+            get {
+                return ResourceManager.GetString("TitleProperty", resourceCulture);
             }
         }
         

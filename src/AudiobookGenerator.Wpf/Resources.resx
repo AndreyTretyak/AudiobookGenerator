@@ -129,6 +129,9 @@
   <data name="AppName" xml:space="preserve">
     <value>Audiobook Generator</value>
   </data>
+  <data name="AuthorsProperties" xml:space="preserve">
+    <value>Authors</value>
+  </data>
   <data name="BookLable" xml:space="preserve">
     <value>Book</value>
   </data>
@@ -140,6 +143,9 @@
   </data>
   <data name="CoverImageLable" xml:space="preserve">
     <value>Cover Image</value>
+  </data>
+  <data name="DescriptionProperty" xml:space="preserve">
+    <value>Description</value>
   </data>
   <data name="DetailsSectionHeader" xml:space="preserve">
     <value>Details</value>
@@ -170,6 +176,9 @@
   </data>
   <data name="TextContentSectionHeader" xml:space="preserve">
     <value>Text Content</value>
+  </data>
+  <data name="TitleProperty" xml:space="preserve">
+    <value>Book Title</value>
   </data>
   <data name="VoiceLable" xml:space="preserve">
     <value>Voice</value>
