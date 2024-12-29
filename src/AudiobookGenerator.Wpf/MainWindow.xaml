@@ -12,7 +12,7 @@
         ResizeMode="CanResize"
         Width="800"
         d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=True}"
-        Title="{x:Static local:Resources.AppName}">
+        Title="{x:Static local:Resources.AppName}" >
     <Window.Resources>
         <Style TargetType="{x:Type Button}" BasedOn="{StaticResource DefaultButtonStyle}" >
             <Setter Property="VerticalAlignment" Value="Stretch" />
