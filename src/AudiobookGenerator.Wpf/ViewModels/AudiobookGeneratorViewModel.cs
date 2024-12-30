@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+﻿using Microsoft.Extensions.Logging.Abstractions;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
@@ -222,8 +223,13 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private async Task GenerateAsync(object? parameter)
     {
         IsGenerating = true;
-        // TODO
-        await Task.Delay(TimeSpan.FromSeconds(30));
+
+        var converter = new BookConverter(bookParser, audioSynthesizer, new FfmpegAudioCopnverter(), new NullLogger<BookConverter>());
+
+        new Microsoft.Win32.SaveFileDialog();
+
+        await Task.CompletedTask; //converter.ConvertAsync();
+
         IsGenerating = false;
     }
 }
