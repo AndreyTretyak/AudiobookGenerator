@@ -242,8 +242,8 @@ public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
 
         var page = await browser.NewPageAsync().ConfigureAwait(false);
 
-        // having title as single tag breacks parser so adding a hack here
-        // TODO: it would be nice to have nicer workaround.
+        // title can't be self closing tag in order for parsing to work, but epub allos it
+        // TODO: it would be nice to have nicer workaround, but this may require using diffirent way of converting.
         var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
         if (selfClosingRegex.IsMatch(htmlContent))
         {
