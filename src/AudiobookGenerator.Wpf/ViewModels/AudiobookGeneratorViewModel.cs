@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Speech.Synthesis;
 using System.Windows;
 using System.Windows.Input;
+using TagLib.IFD;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Wpf.ViewModels;
@@ -41,8 +42,8 @@ internal class BaseViewModel : INotifyPropertyChanged
 internal class AudiobookGeneratorViewModel : BaseViewModel
 {
     private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
+    private const string supportedAudiobookFormatFilter = "M4B audio book format (.m4b)|*.m4b";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
-    private const char authorsSeparator = ',';
     private const int coverComplarePresision = 10000;
     private readonly IAudioSynthesizer audioSynthesizer;
     private readonly IEpubBookParser bookParser;
@@ -138,7 +139,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             [
                 new PropertyViewModel(BookPropertyType.Title, book.Title),
                 new PropertyViewModel(BookPropertyType.Description, book.Description),
-                new PropertyViewModel(BookPropertyType.Authors, string.Join(authorsSeparator, book.AuthorList)),
+                new PropertyViewModel(BookPropertyType.Authors, string.Join(BookViewModel.authorsSeparator, book.AuthorList)),
             ],
             book.Chapters,
             book.Images,
@@ -222,13 +223,43 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     private async Task GenerateAsync(object? parameter)
     {
-        IsGenerating = true;
+        if (SelectedVoice == null || Book == null)
+        {
+            return;
+        }
+
+        var audiobookExtension = ".m4b";
 
         var converter = new BookConverter(bookParser, audioSynthesizer, new FfmpegAudioCopnverter(), new NullLogger<BookConverter>());
 
-        new Microsoft.Win32.SaveFileDialog();
+        var updatedBook = Book.CreateUpdatedModel();
 
-        await Task.CompletedTask; //converter.ConvertAsync();
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = Path.ChangeExtension(updatedBook.FileName, audiobookExtension),
+            DefaultExt = audiobookExtension,
+            Filter = supportedAudiobookFormatFilter
+        };
+
+        var result = dialog.ShowDialog();
+
+        if (result != true)
+        {
+            return;
+        }
+
+        IsGenerating = true;
+
+        var output = new FileInfo(dialog.FileName);
+
+        if (output.Extension != audiobookExtension)
+        {
+            throw new InvalidOperationException($"We can only produce .{audiobookExtension} files, not {output.Extension}.");
+        }
+
+        var tmpFiles = output.Directory ?? new DirectoryInfo(Path.GetTempPath());
+
+        await converter.ConvertAsync(SelectedVoice, updatedBook, output, tmpFiles, CancellationToken.None);
 
         IsGenerating = false;
     }
@@ -236,6 +267,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
 internal class BookViewModel : BaseViewModel
 {
+    internal const char authorsSeparator = ',';
     private BookChapter? selectedChapter;
     private BookImage? cover;
 
@@ -264,6 +296,21 @@ internal class BookViewModel : BaseViewModel
     public BookChapter? SelectedChapter { get => selectedChapter; set => SetAndRaise(ref selectedChapter, value); }
 
     public BookImage? Cover { get => cover; set => SetAndRaise(ref cover, value); }
+
+    public Book CreateUpdatedModel()
+    {
+        var props = Properties.ToDictionary(static p => p.Type, static p => p.Value);
+
+        // TODO untangle mess of paramteres and collection types
+        return new Book(
+            Path.Name,
+            props[BookPropertyType.Title],
+            props[BookPropertyType.Description],
+            [.. props[BookPropertyType.Authors].Split(authorsSeparator, StringSplitOptions.RemoveEmptyEntries)],
+            cover?.Content,
+            [.. Chapters],
+            [.. Images]);
+    }
 }
 
 internal class ChapterViewModel(string title, string content)
