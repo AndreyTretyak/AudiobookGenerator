@@ -396,36 +396,9 @@ public class BookConverter(
     public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken)
     {
         var book = await bookParser.ParseAsync(input, cancellationToken);
+        var voice = synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
+        var bookFile = output.GetSubFile($"{book.FileName}.m4b");
 
-        var bookOutDir = output.CreateSubdirectory(book.FileName);
-        var aacDir = bookOutDir.CreateSubdirectory("aac");
-        var imageDir = bookOutDir.CreateSubdirectory("images");
-
-        foreach (var chapter in book.Chapters)
-        {
-            var voice = synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
-            using var stream = await synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, cancellationToken);
-
-            var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
-            await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, cancellationToken);
-        }
-
-        foreach (var image in book.Images)
-        {
-            var path = imageDir.GetSubPath(image.FileName);
-            logger.LogInformation($"Saving file {image.FileName}", ConsoleColor.Green);
-            System.IO.File.WriteAllBytes(path, image.Content);
-        }
-
-        logger.LogInformation("Joining");
-        var bookFile = bookOutDir.GetSubFile($"{book.FileName}.m4b");
-        await audioConverter.CreateM4bAsync(aacDir.GetFiles(), bookFile, cancellationToken);
-        logger.LogInformation("Done joining");
-
-        logger.LogInformation($"Adding cover image");
-        await audioConverter.AddImagesAndTagsToM4bAsync(bookFile, book, cancellationToken);
-        logger.LogInformation("Done adding cover");
-
-        logger.LogInformation("Done");
+        await ConvertAsync(voice, book, bookFile, output, cancellationToken);
     }
 }
