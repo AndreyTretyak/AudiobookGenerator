@@ -10,6 +10,7 @@ using VersOne.Epub.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
+using TagLib.Ape;
 
 namespace YewCone.AudiobookGenerator.Core;
 
@@ -82,7 +83,7 @@ internal static class DirectoryInfoExtension
     }
 }
 
-internal class FfmpegAudioCopnverter : IAudioConverter
+public class FfmpegAudioCopnverter : IAudioConverter
 {
     private Task?  initializeTask;
 
@@ -237,6 +238,8 @@ public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
     {
         var browser = await InitializeAsync(cancellationToken).ConfigureAwait(false);
 
+
+
         var page = await browser.NewPageAsync().ConfigureAwait(false);
 
         // having title as single tag breacks parser so adding a hack here
@@ -274,19 +277,12 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
 
     public async Task<Book> ParseAsync(FileInfo fileInfo, CancellationToken cancellationToken)
     {
-        var stream = fileInfo.OpenRead();
+        using var stream = fileInfo.OpenRead();
         var book = EpubReader.ReadBook(stream, EpubReaderOptions);
 
-        var chapters = book.ReadingOrder.Select(c => new Chapter("", c.Content, c.FilePath));
+        var chapterMapping = CollectChapterNames(book);
 
-        // alternatives for getting content (so far look worth)
-
-        //var chapters = book.Content.Html.Local.Select(c => new Chapter("", c.Content, c.FilePath));
-
-        //var chapters = book.Navigation!.Select(c =>
-        //        c.HtmlContentFile == null
-        //            ? Chapter.Empty
-        //            : new Chapter(c.Title, c.HtmlContentFile.Content, c.HtmlContentFile.FilePath));
+        var chapters = book.ReadingOrder.Select(c => new Chapter(chapterMapping.GetValueOrDefault(c.FilePath, ""), c.Content, c.FilePath));
 
         var convertTask = chapters
             .Where(chapters => !string.IsNullOrWhiteSpace(chapters.Content))
@@ -301,6 +297,36 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
             book.CoverImage,
             plainTextChapters.Where(chapter => !string.IsNullOrEmpty(chapter.Content)).Select(ConvertChapter).ToArray(),
             book.Content.Images.Local.Select(ConvertImage).ToArray());
+    }
+
+    private Dictionary<string, string> CollectChapterNames(EpubBook book)
+    {
+        var mapping = new Dictionary<string, string>();
+
+        if (book.Navigation == null)
+        {
+            return mapping;
+        }
+
+        void ExtractChapterMapping(EpubNavigationItem item, Dictionary<string, string> mapping)
+        {
+            if (item.HtmlContentFile != null)
+            {
+                mapping[item.HtmlContentFile.FilePath] = item.Title;
+            }
+
+            foreach (var nested in item.NestedItems)
+            {
+                ExtractChapterMapping(nested, mapping);
+            }
+        }
+
+        foreach (var item in book.Navigation)
+        {
+            ExtractChapterMapping(item, mapping);
+        }
+
+        return mapping;
     }
 
     private async Task<Chapter> ChapterToPlainTextAsync(Chapter chapter, CancellationToken cancellationToken)
