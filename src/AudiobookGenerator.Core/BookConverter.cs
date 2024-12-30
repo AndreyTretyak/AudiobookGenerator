@@ -282,7 +282,7 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
 
         var chapterMapping = CollectChapterNames(book);
 
-        var chapters = book.ReadingOrder.Select(c => new Chapter(chapterMapping.GetValueOrDefault(c.FilePath, ""), c.Content, c.FilePath));
+        var chapters = book.ReadingOrder.Select(c => new Chapter(c.FilePath, chapterMapping.GetValueOrDefault(c.FilePath, ""), c.Content));
 
         var convertTask = chapters
             .Where(chapters => !string.IsNullOrWhiteSpace(chapters.Content))
@@ -339,7 +339,7 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
                 : parsedTitle
             : chapter.Title;
 
-        return new Chapter(title, content, fileName);
+        return new Chapter(fileName, title, content);
     }
 
     private static BookChapter ConvertChapter(Chapter chapter, int index) =>
@@ -353,10 +353,7 @@ public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
             $"{(index + 1):0000} {Path.GetFileName(imageFile.FilePath)}",
             imageFile.Content);
 
-    private readonly record struct Chapter(string Title, string Content, string FileName)
-    {
-        public static Chapter Empty = new Chapter("", "", "");
-    }
+    private readonly record struct Chapter(string FileName, string Title, string Content);
 }
 
 public class BookConverter(
@@ -365,6 +362,37 @@ public class BookConverter(
     IAudioConverter audioConverter,
     ILogger<BookConverter> logger)
 {
+    public async Task ConvertAsync(VoiceInfo voice, Book book, FileInfo output, DirectoryInfo tmpFileDir, CancellationToken cancellationToken)
+    {
+        var bookOutDir = tmpFileDir.CreateSubdirectory(Path.GetFileNameWithoutExtension(book.FileName));
+        var aacDir = bookOutDir.CreateSubdirectory("aac");
+        var imageDir = bookOutDir.CreateSubdirectory("images");
+
+        foreach (var chapter in book.Chapters)
+        {
+            using var stream = await synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, cancellationToken);
+            var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
+            await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, cancellationToken);
+        }
+
+        foreach (var image in book.Images)
+        {
+            var path = imageDir.GetSubPath(image.FileName);
+            logger.LogInformation($"Saving file {image.FileName}", ConsoleColor.Green);
+            System.IO.File.WriteAllBytes(path, image.Content);
+        }
+
+        logger.LogInformation("Joining");
+        await audioConverter.CreateM4bAsync(aacDir.GetFiles(), output, cancellationToken);
+        logger.LogInformation("Done joining");
+
+        logger.LogInformation($"Adding cover image");
+        await audioConverter.AddImagesAndTagsToM4bAsync(output, book, cancellationToken);
+        logger.LogInformation("Done adding cover");
+
+        logger.LogInformation("Done");
+    }
+
     public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, CancellationToken cancellationToken)
     {
         var book = await bookParser.ParseAsync(input, cancellationToken);
