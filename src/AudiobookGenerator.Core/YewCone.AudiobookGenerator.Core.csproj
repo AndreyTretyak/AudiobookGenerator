@@ -11,5 +11,6 @@
     <PackageReference Include="VersOne.Epub"/>
     <PackageReference Include="FFMpegCore"/>
     <PackageReference Include="TagLibSharp"/>
+    <PackageReference Include="HtmlAgilityPack"/>
   </ItemGroup>
 </Project>

@@ -5,6 +5,7 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="HtmlAgilityPack" Version="1.11.72" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
     <PackageVersion Include="System.Text.Json" Version="9.0.0" />
