@@ -8,7 +8,7 @@
         xmlns:core="clr-namespace:YewCone.AudiobookGenerator.Core;assembly=YewCone.AudiobookGenerator.Core"
         xmlns:viewModels="clr-namespace:YewCone.AudiobookGenerator.Wpf.ViewModels"
         mc:Ignorable="d"
-        SizeToContent="Height"
+        SizeToContent="Manual"
         ResizeMode="CanResize"
         Width="800"
         d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=True}"
@@ -85,7 +85,9 @@
             <StackPanel>
                 <DockPanel>
                     <ListBox ItemsSource="{Binding Book.Chapters}" SelectedItem="{Binding Book.SelectedChapter}"/>
-                    <TextBox Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}" TextWrapping="Wrap" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <TextBox Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}" TextWrapping="Wrap" />
+                    </ScrollViewer>
                 </DockPanel>
             </StackPanel>
         </Expander>
@@ -109,7 +111,9 @@
                     </Button>
                     <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
                 </DockPanel>
-                <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                    <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" />
+                </ScrollViewer>
             </DockPanel>
         </Expander>
         <Expander Grid.Row="3" Header="{x:Static local:Resources.DetailsSectionHeader}" IsExpanded="False" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
