@@ -12,8 +12,13 @@ namespace YewCone.AudiobookGenerator.Wpf
     {
         public MainWindow()
         {
-            var parser = new VersOneEpubBookParser(new PlaywrightHtmlConverter());
+            IHtmlConverter converter = true
+                ? new HtmlAgilityPackHtmlConverter(new NullLogger<HtmlAgilityPackHtmlConverter>())
+                : new PlaywrightHtmlConverter(new NullLogger<PlaywrightHtmlConverter>());
+
+            var parser = new VersOneEpubBookParser(converter, new NullLogger<VersOneEpubBookParser>());
             var synthesizer = new LocalAudioSynthesizer(new NullLogger<LocalAudioSynthesizer>());
+
             DataContext = new AudiobookGeneratorViewModel(parser, synthesizer);
             InitializeComponent();
         }

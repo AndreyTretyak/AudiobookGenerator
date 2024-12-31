@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 using TagLib.Ape;
+using System.Xml;
+using HtmlAgilityPack;
 
 namespace YewCone.AudiobookGenerator.Core;
 
@@ -217,7 +219,7 @@ public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAud
     }
 }
 
-public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
+public class PlaywrightHtmlConverter(ILogger<PlaywrightHtmlConverter> logger) : IHtmlConverter, IDisposable
 {
     private IPlaywright? _playwright;
     private IBrowser? _browser;
@@ -238,8 +240,6 @@ public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
     {
         var browser = await InitializeAsync(cancellationToken).ConfigureAwait(false);
 
-
-
         var page = await browser.NewPageAsync().ConfigureAwait(false);
 
         // title can't be self closing tag in order for parsing to work, but epub allos it
@@ -247,6 +247,7 @@ public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
         var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
         if (selfClosingRegex.IsMatch(htmlContent))
         {
+            logger.LogWarning("Epub contains self closing title tag that breaks parsing, replacing it.");
             htmlContent = selfClosingRegex.Replace(htmlContent, "<title></title>");
         }
 
@@ -271,14 +272,85 @@ public class PlaywrightHtmlConverter : IHtmlConverter, IDisposable
     public void Dispose() => _playwright?.Dispose();
 }
 
-public class VersOneEpubBookParser(IHtmlConverter converter) : IEpubBookParser
+public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> logger) : IHtmlConverter
 {
-    public EpubReaderOptions EpubReaderOptions { get; set; } = new EpubReaderOptions();
+    public Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
+    {
+        // title can't be self closing tag in order for parsing to work, but epub allos it
+        // TODO: it would be nice to have nicer workaround, but this may require using diffirent way of converting.
+        var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
+        if (selfClosingRegex.IsMatch(htmlContent))
+        {
+            logger.LogWarning("Epub contains self closing title tag that breaks parsing, replacing it.");
+            htmlContent = selfClosingRegex.Replace(htmlContent, "<title></title>");
+        }
 
+        HtmlDocument htmlDocument = new();
+        htmlDocument.LoadHtml(htmlContent);
+
+        var images = htmlDocument.DocumentNode.SelectNodes("//img");
+        if (images != null)
+        {
+            var replaceNodes = htmlDocument.DocumentNode.SelectNodes("//img").Select(img =>
+            {
+                var altText = img.Attributes["alt"]?.Value ?? string.Empty;
+                var fileName = img.Attributes["src"].Value.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Last();
+                return (Original: img, Replacement: HtmlTextNode.CreateNode($"book image: {altText} file name {fileName}"));
+            });
+
+            foreach (var (original, replacement) in replaceNodes)
+            {
+                original.ParentNode.ReplaceChild(replacement, original);
+            }
+        }
+
+        static string GetText(HtmlDocument document, string xpath)
+        {
+            var nodes = document.DocumentNode.SelectNodes(xpath);
+
+            return nodes == null
+                ? string.Empty
+                : string.Join(" ", nodes.Select(n => n.InnerText)).Trim();
+        }
+
+        var title = GetText(htmlDocument, "//title//text()");
+        var content = GetText(htmlDocument, "//body//text()");  // if we use //body//text() then title chapter won't be anounced during narration 
+        return Task.FromResult((title, content));
+    }
+}
+
+public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpubBookParser> logger) : IEpubBookParser
+{
     public async Task<Book> ParseAsync(FileInfo fileInfo, CancellationToken cancellationToken)
     {
+        // https://os.vers.one/EpubReader/malformed-epub/index.html
+
+        var options = new EpubReaderOptions
+        {
+            PackageReaderOptions = new PackageReaderOptions
+            {
+                IgnoreMissingToc = true,
+                SkipInvalidManifestItems = true,
+            },
+            Epub2NcxReaderOptions = new Epub2NcxReaderOptions
+            {
+                IgnoreMissingContentForNavigationPoints = true
+            },
+            XmlReaderOptions = new XmlReaderOptions
+            {
+                SkipXmlHeaders = true
+            }
+        };
+
+        options.ContentReaderOptions.ContentFileMissing += (sender, e) =>
+        {
+            // TODO Report error about e.FilePath missing
+            logger.LogError($"Content file '{e.FilePath}' is missing in the epub.");
+            e.SuppressException = true;
+        };
+
         using var stream = fileInfo.OpenRead();
-        var book = EpubReader.ReadBook(stream, EpubReaderOptions);
+        var book = EpubReader.ReadBook(stream, options);
 
         var chapterMapping = CollectChapterNames(book);
 
