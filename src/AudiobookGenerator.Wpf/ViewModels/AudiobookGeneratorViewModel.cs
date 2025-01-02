@@ -54,11 +54,11 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private VoiceInfo? selectedVoice;
 
     public BookViewModel? Book {
-        get => book; 
+        get => book;
         private set => SetAndRaise(
             ref book,
             value,
-            [nameof(IsBookSelected), nameof(TextContentSectionHeader), nameof(ImagesSectionHeader), nameof(BookPath)],
+            [nameof(IsBookSelected), nameof(ShowBookSelection), nameof(TextContentSectionHeader), nameof(ImagesSectionHeader), nameof(BookPath)],
             [SaveImageAsCommand, AddImageCommand, PlayOrStopCommand, GenerateCommand]); }
 
     public bool IsGenerating { get => isGenerating; private set => SetAndRaise(ref isGenerating, value); }
@@ -82,6 +82,8 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     public string ImagesSectionHeader => Resources.ImagesSectionHeader + (Book == null ? "" : string.Format(Resources.ImagesLable, Book.Images.Count));
 
     public bool IsBookSelected => Book != null;
+
+    public bool ShowBookSelection => !IsBookSelected;
 
     public bool IsVoiceSelected => SelectedVoice != null;
 
