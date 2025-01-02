@@ -79,7 +79,8 @@
                 </Hyperlink>
             </TextBlock>
         </Grid>
-        <TabControl Grid.Row="1" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
+        <TabControl Grid.Row="1" Margin="0 5"
+            Visibility="{Binding IsBookSelected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" >
             <TabItem Header="{Binding TextContentSectionHeader, Mode=OneWay}" >
                 <DockPanel>
                     <ListBox
@@ -109,9 +110,7 @@
                         </Button>
                         <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
                     </DockPanel>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                        <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" />
-                    </ScrollViewer>
+                    <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" Stretch="Uniform" />
                 </DockPanel>
             </TabItem>
             <TabItem Header="{x:Static local:Resources.DetailsSectionHeader}" >
