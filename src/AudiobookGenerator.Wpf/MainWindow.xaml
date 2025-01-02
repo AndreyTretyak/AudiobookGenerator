@@ -11,7 +11,7 @@
         SizeToContent="Manual"
         ResizeMode="CanResize"
         Width="800"
-        Height="600"
+        Height="580"
         d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=True}"
         Title="{x:Static local:Resources.AppName}" >
     <Window.Resources>
@@ -36,110 +36,133 @@
         </DataTemplate>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     </Window.Resources>
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" Orientation="Horizontal" >
-            <TextBlock VerticalAlignment="Center" Text="{x:Static local:Resources.BookLable}"/>
-            <Button Margin="5 0" Command="{Binding SelectBookCommand, Mode=OneTime}">
-                <TextBlock>
+    <Grid>
+        <Button
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            Visibility="{Binding ShowBookSelection, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Command="{Binding SelectBookCommand, Mode=OneTime}">
+            <StackPanel
+                Orientation="Vertical">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        FontFamily="{StaticResource SymbolThemeFontFamily}"
+                        Text="&#xE8FF;"
+                        FontSize="50"/>
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Text="{x:Static local:Resources.BookPathPlaceholder}" />
+                </StackPanel>
+        </Button>
+        <DockPanel
+            Visibility="{Binding IsBookSelected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Margin="10"
+            LastChildFill="True" >
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" >
+                <TextBlock VerticalAlignment="Center" Text="{x:Static local:Resources.BookLable}"/>
+                <Button Margin="5 0" Command="{Binding SelectBookCommand, Mode=OneTime}">
+                    <TextBlock>
                     <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
                     <Run Text="{x:Static local:Resources.SelectBookLable}" />
-                </TextBlock>
-            </Button>
-            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap"
+                    </TextBlock>
+                </Button>
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap"
                 Text="{Binding BookPath, Mode=OneWay}"/>
-        </StackPanel>
-        <TabControl Grid.Row="1" Margin="0 5"
-            Visibility="{Binding IsBookSelected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" >
-            <TabItem Header="{Binding TextContentSectionHeader, Mode=OneWay}" >
-                <Grid Margin="3">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <ListBox
+            </StackPanel>
+            <DockPanel
+                Margin="0 5"
+                DockPanel.Dock="Bottom"
+                LastChildFill="True">
+                    <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right"
+                    Command="{Binding GenerateCommand, Mode=OneTime}">
+                        <TextBlock>
+                        <Run Text="{x:Static local:Resources.GenerateLable}" />
+                        <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
+                        </TextBlock>
+                    </Button>
+                    <ProgressBar DockPanel.Dock="Right" Margin="5"
+                    Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    IsIndeterminate="True" />
+                    <ListView DockPanel.Dock="Bottom"
+                    Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    ItemsSource="{Binding Logs, Mode=OneTime}"/>
+            </DockPanel>
+            <DockPanel
+                DockPanel.Dock="Bottom"
+                LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{x:Static local:Resources.VoiceLable}"/>
+                    <Button DockPanel.Dock="Right" Command="{Binding PlayOrStopCommand, Mode=OneTime}">
+                        <TextBlock FontFamily="{StaticResource SymbolThemeFontFamily}"
+                       Text="{Binding PlayStopIcon, Mode=OneWay}"
+                       ToolTip="{Binding PlayStopToolTip, Mode=OneWay}"/>
+                    </Button>
+                    <TextBlock DockPanel.Dock="Right" Margin="5 0" VerticalAlignment="Center">
+                        <Hyperlink  NavigateUri="{Binding AddVoiceLink, Mode=OneTime}">
+                            <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
+                        </Hyperlink>
+                    </TextBlock>
+                    <ComboBox Margin="5 0" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
+            </DockPanel>
+            <TabControl
+                Margin="0 5"
+                DockPanel.Dock="Top">
+                <TabItem Header="{Binding TextContentSectionHeader, Mode=OneWay}" >
+                    <Grid Margin="3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <ListBox
                         Grid.Column="0"
                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                         ScrollViewer.VerticalScrollBarVisibility="Auto"
                         ItemsSource="{Binding Book.Chapters}"
                         SelectedItem="{Binding Book.SelectedChapter}"/>
-                    <GridSplitter Grid.Row="1" Width="5" VerticalAlignment="Stretch" />
-                    <ScrollViewer
+                        <GridSplitter Grid.Row="1" Width="5" VerticalAlignment="Stretch" />
+                        <ScrollViewer
                         Grid.Column="2"
                         VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Disabled">
-                        <TextBox Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}" TextWrapping="Wrap" />
-                    </ScrollViewer>
-                </Grid>
-            </TabItem>
-            <TabItem Header="{Binding ImagesSectionHeader, Mode=OneWay}">
-                <DockPanel Margin="3">
-                    <DockPanel DockPanel.Dock="Top">
-                        <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
-                        <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
-                            <TextBlock>
+                            <TextBox Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}" TextWrapping="Wrap" />
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+                <TabItem Header="{Binding ImagesSectionHeader, Mode=OneWay}">
+                    <DockPanel Margin="3">
+                        <DockPanel DockPanel.Dock="Top">
+                            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
+                            <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
+                                <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
                             <Run Text="{x:Static local:Resources.AddImageLable}"/>
-                            </TextBlock>
-                        </Button>
-                        <Button DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
-                            <TextBlock>
+                                </TextBlock>
+                            </Button>
+                            <Button DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
+                                <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
                             <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
-                            </TextBlock>
-                        </Button>
-                        <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                                </TextBlock>
+                            </Button>
+                            <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                        </DockPanel>
+                        <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" Stretch="Uniform" />
                     </DockPanel>
-                    <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" Stretch="Uniform" />
-                </DockPanel>
-            </TabItem>
-            <TabItem Header="{x:Static local:Resources.DetailsSectionHeader}" >
-                <DataGrid 
+                </TabItem>
+                <TabItem Header="{x:Static local:Resources.DetailsSectionHeader}" >
+                    <DataGrid 
                     Margin="3"
                     ItemsSource="{Binding Book.Properties, Mode=OneWay}"
                     AutoGenerateColumns="False">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Property" Width="*" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Value" Width="*" Binding="{Binding Value}"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </TabItem>
-        </TabControl>
-        <DockPanel Grid.Row="2" LastChildFill="True" >
-            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{x:Static local:Resources.VoiceLable}"/>
-            <Button DockPanel.Dock="Right" Command="{Binding PlayOrStopCommand, Mode=OneTime}">
-                <TextBlock FontFamily="{StaticResource SymbolThemeFontFamily}"
-                   Text="{Binding PlayStopIcon, Mode=OneWay}"
-                   ToolTip="{Binding PlayStopToolTip, Mode=OneWay}"/>
-            </Button>
-            <TextBlock DockPanel.Dock="Right" Margin="5 0" VerticalAlignment="Center">
-                <Hyperlink  NavigateUri="{Binding AddVoiceLink, Mode=OneTime}">
-                    <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
-                </Hyperlink>
-            </TextBlock>
-            <ComboBox Margin="5 0" HorizontalAlignment="Stretch"
-                ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
-        </DockPanel>
-        <DockPanel Grid.Row="3" LastChildFill="True" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
-            <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right"
-                Command="{Binding GenerateCommand, Mode=OneTime}">
-                <TextBlock>
-                    <Run Text="{x:Static local:Resources.GenerateLable}" />
-                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
-                </TextBlock>
-            </Button>
-            <ProgressBar DockPanel.Dock="Right" Margin="5"
-                Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
-                IsIndeterminate="True" />
-            <ListView DockPanel.Dock="Bottom"
-                Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
-                ItemsSource="{Binding Logs, Mode=OneTime}"/>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Property" Width="*" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Value" Width="*" Binding="{Binding Value}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+            </TabControl>
         </DockPanel>
     </Grid>
 </Window>
