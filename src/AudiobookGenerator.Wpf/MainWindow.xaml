@@ -93,7 +93,7 @@
                     Margin="5 0"
                     DockPanel.Dock="Right"
                     VerticalAlignment="Center">
-                    <Hyperlink  NavigateUri="{Binding AddVoiceLink, Mode=OneTime}">
+                    <Hyperlink Command="{Binding ShowHowToAddVoiceCommand, Mode=OneTime}">
                         <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
                     </Hyperlink>
                 </TextBlock>
