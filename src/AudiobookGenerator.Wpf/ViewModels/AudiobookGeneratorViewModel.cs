@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -85,8 +86,6 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public bool IsVoiceSelected => SelectedVoice != null;
 
-    public Uri AddVoiceLink { get; } = new Uri(Resources.AddVoiceLink);
-
     public DelegateCommand SelectBookCommand { get; }
 
     public DelegateCommand PlayOrStopCommand { get; }
@@ -97,11 +96,14 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public DelegateCommand GenerateCommand { get; }
 
+    public DelegateCommand ShowHowToAddVoiceCommand { get; }
+
     public AudiobookGeneratorViewModel(IEpubBookParser parser, IAudioSynthesizer synthesizer)
     {
         bookParser = parser;
         audioSynthesizer = synthesizer;
 
+        ShowHowToAddVoiceCommand = new DelegateCommand(ShowHowToAddVoiceAsync);
         SelectBookCommand = new DelegateCommand(SelectBookAsync);
         PlayOrStopCommand = new DelegateCommand(PlayOrStopAsync, parameter => this.IsVoiceSelected && this.Book != null && this.Book.SelectedChapter != null);
 
@@ -112,6 +114,12 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         GenerateCommand = new DelegateCommand(GenerateAsync, parameter => this.IsVoiceSelected && this.IsBookSelected);
 
         Voices = [.. audioSynthesizer.GetVoices()];
+    }
+
+    private Task ShowHowToAddVoiceAsync(object? parameter)
+    {
+        Process.Start(new ProcessStartInfo(Resources.AddVoiceLink) { UseShellExecute = true });
+        return Task.CompletedTask;
     }
 
     private async Task SelectBookAsync(object? parameter)
