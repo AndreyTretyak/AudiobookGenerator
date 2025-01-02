@@ -11,6 +11,7 @@
         SizeToContent="Manual"
         ResizeMode="CanResize"
         Width="800"
+        Height="1200"
         d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=True}"
         Title="{x:Static local:Resources.AppName}" >
     <Window.Resources>
@@ -38,8 +39,7 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -79,52 +79,51 @@
                 </Hyperlink>
             </TextBlock>
         </Grid>
-        <Expander Grid.Row="1" IsExpanded="False" Margin="0 5"
-            IsEnabled="{Binding IsBookSelected, Mode=OneWay}"
-            Header="{Binding TextContentSectionHeader}">
-            <StackPanel>
+        <TabControl Grid.Row="1" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
+            <TabItem Header="{Binding TextContentSectionHeader, Mode=OneWay}" >
                 <DockPanel>
-                    <ListBox ItemsSource="{Binding Book.Chapters}" SelectedItem="{Binding Book.SelectedChapter}"/>
+                    <ListBox
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        ItemsSource="{Binding Book.Chapters}"
+                        SelectedItem="{Binding Book.SelectedChapter}"/>
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <TextBox Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}" TextWrapping="Wrap" />
                     </ScrollViewer>
                 </DockPanel>
-            </StackPanel>
-        </Expander>
-        <Expander Grid.Row="2" IsExpanded="False" Margin="0 5"
-            IsEnabled="{Binding IsBookSelected, Mode=OneWay}"
-            Header="{Binding ImagesSectionHeader}">
-            <DockPanel>
-                <DockPanel DockPanel.Dock="Top">
-                    <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
-                    <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
-                        <TextBlock>
+            </TabItem>
+            <TabItem Header="{Binding ImagesSectionHeader, Mode=OneWay}">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top">
+                        <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
+                        <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
+                            <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
                             <Run Text="{x:Static local:Resources.AddImageLable}"/>
-                        </TextBlock>
-                    </Button>
-                    <Button DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
-                        <TextBlock>
+                            </TextBlock>
+                        </Button>
+                        <Button DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
+                            <TextBlock>
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
                             <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
-                        </TextBlock>
-                    </Button>
-                    <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                            </TextBlock>
+                        </Button>
+                        <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                    </DockPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                        <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" />
+                    </ScrollViewer>
                 </DockPanel>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                    <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" />
-                </ScrollViewer>
-            </DockPanel>
-        </Expander>
-        <Expander Grid.Row="3" Header="{x:Static local:Resources.DetailsSectionHeader}" IsExpanded="False" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
-            <DataGrid ItemsSource="{Binding Book.Properties, Mode=OneWay}" AutoGenerateColumns="False">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Property" Width="*" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" />
-                    <DataGridTextColumn Header="Value" Width="*" Binding="{Binding Value}"/>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Expander>
-        <DockPanel Grid.Row="4" LastChildFill="True" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
+            </TabItem>
+            <TabItem Header="{x:Static local:Resources.DetailsSectionHeader}" >
+                <DataGrid ItemsSource="{Binding Book.Properties, Mode=OneWay}" AutoGenerateColumns="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Property" Width="*" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Value" Width="*" Binding="{Binding Value}"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+        </TabControl>
+        <DockPanel Grid.Row="3" LastChildFill="True" Margin="0 5" IsEnabled="{Binding IsBookSelected, Mode=OneWay}" >
             <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right"
                 Command="{Binding GenerateCommand, Mode=OneTime}">
                 <TextBlock>
