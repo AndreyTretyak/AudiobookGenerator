@@ -132,9 +132,6 @@
   <data name="AuthorsProperties" xml:space="preserve">
     <value>Authors</value>
   </data>
-  <data name="BookLable" xml:space="preserve">
-    <value>Book</value>
-  </data>
   <data name="BookPathPlaceholder" xml:space="preserve">
     <value>Please select ebook file</value>
   </data>
@@ -168,8 +165,8 @@
   <data name="SaveImageAsLable" xml:space="preserve">
     <value>Save Image As...</value>
   </data>
-  <data name="SelectBookLable" xml:space="preserve">
-    <value>Select Book...</value>
+  <data name="ChangeBookLable" xml:space="preserve">
+    <value>Change Book...</value>
   </data>
   <data name="StopToolTip" xml:space="preserve">
     <value>Stop</value>
@@ -180,10 +177,10 @@
   <data name="TitleProperty" xml:space="preserve">
     <value>Book Title</value>
   </data>
-  <data name="VoiceLable" xml:space="preserve">
-    <value>Voice</value>
-  </data>
   <data name="VoicePlaceholder" xml:space="preserve">
-    <value>Voice Name</value>
+    <value>Please select voice</value>
+  </data>
+  <data name="SelectVoiceLable" xml:space="preserve">
+    <value>Select Voice</value>
   </data>
 </root>

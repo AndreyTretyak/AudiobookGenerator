@@ -106,20 +106,20 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Book.
-        /// </summary>
-        public static string BookLable {
-            get {
-                return ResourceManager.GetString("BookLable", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Please select ebook file.
         /// </summary>
         public static string BookPathPlaceholder {
             get {
                 return ResourceManager.GetString("BookPathPlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Change Book....
+        /// </summary>
+        public static string ChangeBookLable {
+            get {
+                return ResourceManager.GetString("ChangeBookLable", resourceCulture);
             }
         }
         
@@ -214,11 +214,11 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Select Book....
+        ///   Looks up a localized string similar to Select Voice.
         /// </summary>
-        public static string SelectBookLable {
+        public static string SelectVoiceLable {
             get {
-                return ResourceManager.GetString("SelectBookLable", resourceCulture);
+                return ResourceManager.GetString("SelectVoiceLable", resourceCulture);
             }
         }
         
@@ -250,16 +250,7 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Voice.
-        /// </summary>
-        public static string VoiceLable {
-            get {
-                return ResourceManager.GetString("VoiceLable", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Voice Name.
+        ///   Looks up a localized string similar to Please select voice.
         /// </summary>
         public static string VoicePlaceholder {
             get {

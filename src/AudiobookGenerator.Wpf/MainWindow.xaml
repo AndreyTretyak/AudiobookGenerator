@@ -60,15 +60,13 @@
             Margin="10"
             LastChildFill="True" >
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" >
-                <TextBlock VerticalAlignment="Center" Text="{x:Static local:Resources.BookLable}"/>
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Book.Path, Mode=OneWay}"/>
                 <Button Margin="5 0" Command="{Binding SelectBookCommand, Mode=OneTime}">
                     <TextBlock>
-                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
-                    <Run Text="{x:Static local:Resources.SelectBookLable}" />
+                        <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
+                        <Run Text="{x:Static local:Resources.ChangeBookLable}" />
                     </TextBlock>
                 </Button>
-                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap"
-                Text="{Binding BookPath, Mode=OneWay}"/>
             </StackPanel>
             <DockPanel
                 Margin="0 5"
@@ -91,19 +89,29 @@
             <DockPanel
                 DockPanel.Dock="Bottom"
                 LastChildFill="True">
-                    <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{x:Static local:Resources.VoiceLable}"/>
-                    <Button DockPanel.Dock="Right" Command="{Binding PlayOrStopCommand, Mode=OneTime}">
-                        <TextBlock FontFamily="{StaticResource SymbolThemeFontFamily}"
-                       Text="{Binding PlayStopIcon, Mode=OneWay}"
-                       ToolTip="{Binding PlayStopToolTip, Mode=OneWay}"/>
-                    </Button>
-                    <TextBlock DockPanel.Dock="Right" Margin="5 0" VerticalAlignment="Center">
-                        <Hyperlink  NavigateUri="{Binding AddVoiceLink, Mode=OneTime}">
-                            <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
-                        </Hyperlink>
-                    </TextBlock>
-                    <ComboBox Margin="5 0" HorizontalAlignment="Stretch"
-                        ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
+                <TextBlock
+                    Margin="5 0"
+                    DockPanel.Dock="Right"
+                    VerticalAlignment="Center">
+                    <Hyperlink  NavigateUri="{Binding AddVoiceLink, Mode=OneTime}">
+                        <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
+                    </Hyperlink>
+                </TextBlock>
+                <Button DockPanel.Dock="Right" Command="{Binding PlayOrStopCommand, Mode=OneTime}">
+                    <TextBlock FontFamily="{StaticResource SymbolThemeFontFamily}"
+                        Text="{Binding PlayStopIcon, Mode=OneWay}"
+                        ToolTip="{Binding PlayStopToolTip, Mode=OneWay}"/>
+                </Button>
+                <TextBlock
+                    DockPanel.Dock="Left"
+                    VerticalAlignment="Center"
+                    Text="{x:Static local:Resources.SelectVoiceLable}"/>
+                <ComboBox
+                    DockPanel.Dock="Left"
+                    Margin="5 0"
+                    HorizontalAlignment="Stretch"
+                    Text="{x:Static local:Resources.VoicePlaceholder}"
+                    ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
             </DockPanel>
             <TabControl
                 Margin="0 5"
