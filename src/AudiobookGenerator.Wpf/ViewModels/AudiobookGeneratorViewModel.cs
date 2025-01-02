@@ -58,7 +58,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         private set => SetAndRaise(
             ref book,
             value,
-            [nameof(IsBookSelected), nameof(ShowBookSelection), nameof(TextContentSectionHeader), nameof(ImagesSectionHeader), nameof(BookPath)],
+            [nameof(IsBookSelected), nameof(ShowBookSelection), nameof(TextContentSectionHeader), nameof(ImagesSectionHeader)],
             [SaveImageAsCommand, AddImageCommand, PlayOrStopCommand, GenerateCommand]); }
 
     public bool IsGenerating { get => isGenerating; private set => SetAndRaise(ref isGenerating, value); }
@@ -66,8 +66,6 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     public bool IsPlaying { get => isPlaying; private set => SetAndRaise(ref isPlaying, value, [nameof(PlayStopIcon), nameof(PlayStopToolTip)], []); }
 
     public string PlayStopIcon { get => isPlaying ? "\xE769" /* pause icon */ : "\xE768"; /* play icon */ }
-
-    public string BookPath { get => Book == null ? Resources.BookPathPlaceholder : Book.Path.FullName; }
 
     public string PlayStopToolTip { get => isPlaying ? Resources.StopToolTip : Resources.PlayTooltip; }
 
