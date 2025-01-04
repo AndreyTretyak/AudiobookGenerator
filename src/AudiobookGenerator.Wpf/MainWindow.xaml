@@ -59,15 +59,15 @@
             Visibility="{Binding IsBookSelected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
             Margin="10"
             LastChildFill="True" >
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" >
-                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Book.Path, Mode=OneWay}"/>
-                <Button Margin="5 0" Command="{Binding SelectBookCommand, Mode=OneTime}">
+            <DockPanel DockPanel.Dock="Top" LastChildFill="True">
+                <Button DockPanel.Dock="Right" Margin="5 0" Command="{Binding SelectBookCommand, Mode=OneTime}">
                     <TextBlock>
                         <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xEC50;" />
                         <Run Text="{x:Static local:Resources.ChangeBookLable}" />
                     </TextBlock>
                 </Button>
-            </StackPanel>
+                <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" TextWrapping="NoWrap" Text="{Binding Book.Path, Mode=OneWay}"/>
+            </DockPanel>
             <DockPanel
                 Margin="0 5"
                 DockPanel.Dock="Bottom"
