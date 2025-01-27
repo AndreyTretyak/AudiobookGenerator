@@ -45,7 +45,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
     private const string supportedAudiobookFormatFilter = "M4B audio book format (.m4b)|*.m4b";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
-    private const int coverComplarePresision = 10000;
+    private const int coverComparePresession = 10000;
     private readonly IAudioSynthesizer audioSynthesizer;
     private readonly IEpubBookParser bookParser;
 
@@ -152,7 +152,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             book.Chapters,
             book.Images,
             book.CoverImage != null 
-                ? book.Images.FirstOrDefault(i => Enumerable.SequenceEqual(i.Content.Take(coverComplarePresision), book.CoverImage.Take(coverComplarePresision)))
+                ? book.Images.FirstOrDefault(i => Enumerable.SequenceEqual(i.Content.Take(coverComparePresession), book.CoverImage.Take(coverComparePresession)))
                 : null
                     ?? book.Images.FirstOrDefault());
     }
@@ -168,11 +168,11 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         if (IsPlaying)
         {
-            audioSynthesizer.Speek(Book.SelectedChapter.Content, SelectedVoice);
+            audioSynthesizer.Speak(Book.SelectedChapter.Content, SelectedVoice);
         }
         else 
         {
-            audioSynthesizer.StopSpeeking();
+            audioSynthesizer.StopSpeaking();
         }
 
         return Task.CompletedTask;
@@ -238,7 +238,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var audiobookExtension = ".m4b";
 
-        var converter = new BookConverter(bookParser, audioSynthesizer, new FfmpegAudioCopnverter(), new NullLogger<BookConverter>());
+        var converter = new BookConverter(bookParser, audioSynthesizer, new FfmpegAudioConverter(), new NullLogger<BookConverter>());
 
         var updatedBook = Book.CreateUpdatedModel();
 
@@ -267,7 +267,13 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var tmpFiles = output.Directory ?? new DirectoryInfo(Path.GetTempPath());
 
-        await converter.ConvertAsync(SelectedVoice, updatedBook, output, tmpFiles, CancellationToken.None);
+        await converter.ConvertAsync(
+            SelectedVoice,
+            updatedBook,
+            output,
+            tmpFiles,
+            new ActionProgress<ProgressUpdate>(p => { }),
+            CancellationToken.None);
 
         IsGenerating = false;
     }

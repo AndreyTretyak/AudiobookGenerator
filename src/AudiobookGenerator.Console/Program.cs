@@ -24,6 +24,7 @@ internal class Program
                 new FileInfo(@"F:\Downloads\Long Chills and Case Dough by Brandon Sanderson.epub"),
                 new DirectoryInfo(@"E:\Downloads\"),
                 "en-US",
+                new ActionProgress<ProgressUpdate>(static p => System.Console.WriteLine($"{p.Scope} - {p.CurrentStage} - {p.State}")),
                 cancelationToken);
     }
 }
