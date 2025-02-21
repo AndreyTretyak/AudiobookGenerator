@@ -514,7 +514,49 @@ internal static class ProgressExtensions
     }
 }
 
-public record ProgressUpdate(string Scope, StageType CurrentStage, Progress State);
+public record ProgressUpdate(string Scope, StageType CurrentStage, Progress State) 
+{
+    public int GetPercentage(Book book)
+    {
+        double progress = 0;
+        double currentStageValue = 0;
+        foreach (var stage in stageValues) 
+        {
+            currentStageValue = stage.Value;
+            if (CurrentStage == stage.Type) 
+            {                
+                break;
+            } 
+            else 
+            {
+                progress += currentStageValue;
+            }
+        }
+
+        if (State == Progress.Done)
+        {
+            progress += currentStageValue;
+            return (int)(progress * 100);
+        }
+
+        if (State == Progress.Started) 
+        {
+            return 
+        }
+
+    }
+
+    private int ToPercentage(double value) => (int)Math.Round(value * 100);
+
+    // Sum of values should be 1
+    private readonly (StageType Type, double Value)[] stageValues = [
+        (StageType.Installing,           0.05),
+        (StageType.ConvertTextToWav,     0.50),
+        (StageType.ConvertWavToAac,      0.20),
+        (StageType.MergingIntoM4b,       0.20),
+        (StageType.SavingImage,          0.03),
+        (StageType.UpdatingM4bMetadata,  0.02)];
+}
 
 public enum StageType
 {
