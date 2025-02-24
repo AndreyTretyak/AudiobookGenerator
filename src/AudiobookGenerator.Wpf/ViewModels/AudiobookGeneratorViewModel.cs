@@ -272,10 +272,42 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             updatedBook,
             output,
             tmpFiles,
-            new ActionProgress<ProgressUpdate>(p => { }),
+            new ActionProgress<ProgressUpdate>(ProgressUpdate),
             CancellationToken.None);
 
         IsGenerating = false;
+    }
+
+    private void ProgressUpdate(ProgressUpdate progress)
+    {
+        if (Book == null)
+        {
+            return;
+        }
+
+        var progressPercentage = progress.GetPercentage(Book);
+
+        var messageTemplate = progress.CurrentStage switch
+        {
+            StageType.ConvertTextToWav => Resources.ProgressMessage,
+            StageType.ConvertWavToAac => throw new NotImplementedException(),
+            StageType.SavingImage => throw new NotImplementedException(),
+            StageType.MergingIntoM4b => throw new NotImplementedException(),
+            StageType.UpdatingM4bMetadata => throw new NotImplementedException(),
+            StageType.Installing => throw new NotImplementedException(),
+        };
+
+        var message = string.Format(messageTemplate, progress.Scope);
+
+        var stateMessage = progress.State switch
+        {
+            ProgressState.Started => Resources.ProgressStarted,
+            ProgressState.Completed => Resources.ProgressCompleted,
+            ProgressState.Failed => Resources.ProgressFailed,
+            _ => throw new ArgumentOutOfRangeException(nameof(progress.State), progress.State, null)
+        };
+
+        return message + stateMessage;
     }
 }
 
