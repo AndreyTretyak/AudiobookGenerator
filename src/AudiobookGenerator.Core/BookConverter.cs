@@ -3,7 +3,6 @@ using FFMpegCore;
 using FFMpegCore.Pipes;
 using FFMpegCore.Enums;
 using System.Diagnostics;
-using Microsoft.Playwright;
 using TagLib;
 using VersOne.Epub;
 using VersOne.Epub.Options;
@@ -12,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 using System.Collections.Frozen;
+using System.Drawing;
 
 namespace YewCone.AudiobookGenerator.Core;
 
@@ -21,16 +21,27 @@ public static class AudioBookConverterDependencyInjectionExtensions
     {
         return services
             .AddSingleton<IAudioConverter, FfmpegAudioConverter>()
-            .AddSingleton<IHtmlConverter, PlaywrightHtmlConverter>()
+            .AddSingleton<IHtmlConverter, HtmlAgilityPackHtmlConverter>()
             .AddSingleton<IEpubBookParser, VersOneEpubBookParser>()
             .AddSingleton<IAudioSynthesizer, LocalAudioSynthesizer>()
             .AddSingleton<BookConverter>();
     }
 }
 
-public record BookChapter(string FileName, string Name, string Content);
+public abstract record BookElement(string FileName)
+{
+    public abstract int Size { get; }
+}
 
-public record BookImage(string FileName, byte[] Content);
+public record BookChapter(string FileName, string Name, string Content) : BookElement(FileName)
+{
+    public override int Size => Content.Length;
+}
+
+public record BookImage(string FileName, byte[] Content) : BookElement(FileName) 
+{
+    public override int Size => Content.Length;
+}
 
 public readonly record struct Book(
     string FileName,
@@ -230,58 +241,58 @@ public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAud
     }
 }
 
-public class PlaywrightHtmlConverter(ILogger<PlaywrightHtmlConverter> logger) : IHtmlConverter, IDisposable
-{
-    private IPlaywright? _playwright;
-    private IBrowser? _browser;
+//public class PlaywrightHtmlConverter(ILogger<PlaywrightHtmlConverter> logger) : IHtmlConverter, IDisposable
+//{
+//    private IPlaywright? _playwright;
+//    private IBrowser? _browser;
 
-    private async Task<IBrowser> InitializeAsync(CancellationToken cancellationToken)
-    {
-        if (_browser == null)
-        {
-            Microsoft.Playwright.Program.Main(["install"]);
-            _playwright = await Playwright.CreateAsync().ConfigureAwait(false);
-            _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true }).ConfigureAwait(false);
-        }
+//    private async Task<IBrowser> InitializeAsync(CancellationToken cancellationToken)
+//    {
+//        if (_browser == null)
+//        {
+//            Microsoft.Playwright.Program.Main(["install"]);
+//            _playwright = await Playwright.CreateAsync().ConfigureAwait(false);
+//            _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true }).ConfigureAwait(false);
+//        }
 
-        return _browser;
-    }
+//        return _browser;
+//    }
 
-    public async Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
-    {
-        var browser = await InitializeAsync(cancellationToken).ConfigureAwait(false);
+//    public async Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
+//    {
+//        var browser = await InitializeAsync(cancellationToken).ConfigureAwait(false);
 
-        var page = await browser.NewPageAsync().ConfigureAwait(false);
+//        var page = await browser.NewPageAsync().ConfigureAwait(false);
 
-        // title can't be self closing tag in order for parsing to work, but epub allos it
-        // TODO: it would be nice to have nicer workaround, but this may require using diffirent way of converting.
-        var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
-        if (selfClosingRegex.IsMatch(htmlContent))
-        {
-            logger.LogWarning("Epub contains self closing title tag that breaks parsing, replacing it.");
-            htmlContent = selfClosingRegex.Replace(htmlContent, "<title></title>");
-        }
+//        // title can't be self closing tag in order for parsing to work, but epub allos it
+//        // TODO: it would be nice to have nicer workaround, but this may require using diffirent way of converting.
+//        var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
+//        if (selfClosingRegex.IsMatch(htmlContent))
+//        {
+//            logger.LogWarning("Epub contains self closing title tag that breaks parsing, replacing it.");
+//            htmlContent = selfClosingRegex.Replace(htmlContent, "<title></title>");
+//        }
 
-        await page.SetContentAsync(htmlContent).ConfigureAwait(false);
+//        await page.SetContentAsync(htmlContent).ConfigureAwait(false);
 
-        await page.EvaluateAsync(@"() => {
-                const images = document.querySelectorAll('img');
-                images.forEach(img => {
-                    const altText = 'book image:' + img.getAttribute('alt') + ' file name ' + img.getAttribute('src')?.split('/').pop();
-                    const textNode = document.createTextNode(altText);
-                    img.parentNode.replaceChild(textNode, img);
-                });
-            }");
+//        await page.EvaluateAsync(@"() => {
+//                const images = document.querySelectorAll('img');
+//                images.forEach(img => {
+//                    const altText = 'book image:' + img.getAttribute('alt') + ' file name ' + img.getAttribute('src')?.split('/').pop();
+//                    const textNode = document.createTextNode(altText);
+//                    img.parentNode.replaceChild(textNode, img);
+//                });
+//            }");
 
-        var pageText = await page.EvaluateAsync(@"() => document.body.innerText");
+//        var pageText = await page.EvaluateAsync(@"() => document.body.innerText");
 
-        var title = await page.InnerTextAsync("title").ConfigureAwait(false);
-        var content = await page.InnerTextAsync("body").ConfigureAwait(false);
-        return (title, content);
-    }
+//        var title = await page.InnerTextAsync("title").ConfigureAwait(false);
+//        var content = await page.InnerTextAsync("body").ConfigureAwait(false);
+//        return (title, content);
+//    }
 
-    public void Dispose() => _playwright?.Dispose();
-}
+//    public void Dispose() => _playwright?.Dispose();
+//}
 
 public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> logger) : IHtmlConverter
 {
@@ -524,29 +535,55 @@ public record ProgressUpdate(string Scope, StageType CurrentStage, Progress Stat
         {
             currentStageValue = stage.Value;
             if (CurrentStage == stage.Type) 
-            {                
+            {
                 break;
-            } 
+            }
             else 
             {
                 progress += currentStageValue;
             }
         }
 
-        if (State == Progress.Done)
+        var isPartCompleted = State == Progress.Done;
+        progress += CurrentStage switch
         {
-            progress += currentStageValue;
-            return (int)(progress * 100);
-        }
+            StageType.ConvertTextToWav or StageType.ConvertWavToAac => StageProgrees(Scope, book.Chapters, isPartCompleted),
+            StageType.SavingImage => StageProgrees(Scope, book.Images, isPartCompleted),
+            _ => isPartCompleted ? currentStageValue : 0
+        };
 
-        if (State == Progress.Started) 
-        {
-            return 
-        }
-
+        return ToPercentage(progress);
     }
 
-    private int ToPercentage(double value) => (int)Math.Round(value * 100);
+    private static double StageProgrees<T>(string scope, IEnumerable<T> parts, bool isPartCompleted) where T : BookElement
+    {
+        bool afterCurrent = false;
+        double progress = 0;
+        double total = 0;
+
+        foreach (var part in parts)
+        {
+            total += part.Size;
+            if (afterCurrent)
+            {
+                continue;
+            }
+            else if (part.FileName == scope)
+            {
+                afterCurrent = true;
+                if (isPartCompleted)
+                {
+                    progress += part.Size;
+                }
+            }
+        }
+
+        Debug.Assert(!afterCurrent, "Current scope was not found.");
+
+        return progress / total;
+    }
+
+    private static int ToPercentage(double value) => (int)Math.Round(value * 100);
 
     // Sum of values should be 1
     private readonly (StageType Type, double Value)[] stageValues = [
