@@ -183,4 +183,31 @@
   <data name="SelectVoiceLable" xml:space="preserve">
     <value>Select Voice</value>
   </data>
+  <data name="ConvertTextToWavMessage" xml:space="preserve">
+    <value>Converting text to wav for</value>
+  </data>
+  <data name="ConvertWavToAacMessage" xml:space="preserve">
+    <value>Converting wav to aac for</value>
+  </data>
+  <data name="SavingImageMessage" xml:space="preserve">
+    <value>Saving image</value>
+  </data>
+  <data name="MergingIntoM4bMessage" xml:space="preserve">
+    <value>Merging files into m4b</value>
+  </data>
+  <data name="UpdatingM4bMetadataMessage" xml:space="preserve">
+    <value>Updating m4b metadata</value>
+  </data>
+  <data name="InstallingMessage" xml:space="preserve">
+    <value>Installing component</value>
+  </data>
+  <data name="StartedMessage" xml:space="preserve">
+    <value>started</value>
+  </data>
+  <data name="FailedMessage" xml:space="preserve">
+    <value>failed</value>
+  </data>
+  <data name="DoneMessage" xml:space="preserve">
+    <value>done</value>
+  </data>
 </root>

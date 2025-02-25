@@ -14,11 +14,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YewCone.AudiobookGenerator.Wpf", "src\AudiobookGenerator.Wpf\YewCone.AudiobookGenerator.Wpf.csproj", "{3DA58B9E-A754-4E56-A22F-A4415BC0ECB1}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YewCone.AudiobookGenerator.Core", "src\AudiobookGenerator.Core\YewCone.AudiobookGenerator.Core.csproj", "{8E81DB05-1456-4C9C-B8C5-84DB0488A80C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YewCone.AudiobookGenerator.Console", "src\AudiobookGenerator.Console\YewCone.AudiobookGenerator.Console.csproj", "{876376BA-9FC6-4F65-8EFB-4E8E75B183C3}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YewCone.AudiobookGenerator.Wpf", "src\AudiobookGenerator.Wpf\YewCone.AudiobookGenerator.Wpf.csproj", "{3DA58B9E-A754-4E56-A22F-A4415BC0ECB1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

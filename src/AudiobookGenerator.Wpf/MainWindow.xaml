@@ -12,7 +12,7 @@
         ResizeMode="CanResize"
         Width="800"
         Height="580"
-        d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=True}"
+        d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=False}"
         Title="{x:Static local:Resources.AppName}" >
     <Window.Resources>
         <Style TargetType="{x:Type Button}" BasedOn="{StaticResource DefaultButtonStyle}" >
@@ -72,19 +72,19 @@
                 Margin="0 5"
                 DockPanel.Dock="Bottom"
                 LastChildFill="True">
-                    <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right"
-                    Command="{Binding GenerateCommand, Mode=OneTime}">
-                        <TextBlock>
-                        <Run Text="{x:Static local:Resources.GenerateLable}" />
-                        <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
-                        </TextBlock>
-                    </Button>
-                    <ProgressBar DockPanel.Dock="Right" Margin="5"
-                    Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
-                    IsIndeterminate="True" />
-                    <ListView DockPanel.Dock="Bottom"
-                    Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
-                    ItemsSource="{Binding Logs, Mode=OneTime}"/>
+                <Button DockPanel.Dock="Top" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Stretch" HorizontalAlignment="Right"
+                        Command="{Binding GenerateCommand, Mode=OneTime}">
+                    <TextBlock>
+                            <Run Text="{x:Static local:Resources.GenerateLable}" />
+                            <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
+                    </TextBlock>
+                </Button>
+                <TextBlock DockPanel.Dock="Bottom"
+                        Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Text="{Binding ProgressMessage, Mode=OneWay}"/>
+                <ProgressBar DockPanel.Dock="Bottom" Margin="5" HorizontalAlignment="Stretch"
+                        Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Value="{Binding ProgressPercentage, Mode=OneWay}" Maximum="100"/>
             </DockPanel>
             <DockPanel
                 DockPanel.Dock="Bottom"

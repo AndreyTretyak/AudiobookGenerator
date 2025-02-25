@@ -13,6 +13,7 @@ using HtmlAgilityPack;
 using System.Collections.Frozen;
 using System.Drawing;
 using Microsoft.Playwright;
+using System.Xml.Linq;
 
 namespace YewCone.AudiobookGenerator.Core;
 
@@ -29,22 +30,11 @@ public static class AudioBookConverterDependencyInjectionExtensions
     }
 }
 
-public abstract record BookElement(string FileName)
-{
-    public abstract int Size { get; }
-}
+public record BookChapter(string FileName, string Name, string Content);
 
-public record BookChapter(string FileName, string Name, string Content) : BookElement(FileName)
-{
-    public override int Size => Content.Length;
-}
+public record BookImage(string FileName, byte[] Content);
 
-public record BookImage(string FileName, byte[] Content) : BookElement(FileName) 
-{
-    public override int Size => Content.Length;
-}
-
-public readonly record struct Book(
+public record Book(
     string FileName,
     string Title,
     string Description,
@@ -104,7 +94,7 @@ public class FfmpegAudioConverter : IAudioConverter
     {
         static Picture ByteToPicture(byte[] bytes) => new (new ByteVector(bytes));
 
-        using var state = progress.Start(m4bFile.Name, StageType.UpdatingM4bMetadata);
+        using var state = progress.Start(Path.GetFileNameWithoutExtension(m4bFile.Name), StageType.UpdatingM4bMetadata);
 
         var file = TagLib.File.Create(m4bFile.FullName);
 
@@ -132,7 +122,7 @@ public class FfmpegAudioConverter : IAudioConverter
     public async Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
         await EnsureInitializedAsync(progress, cancellationToken).ConfigureAwait(false);
-        using var state = progress.Start(outputFile.Name, StageType.ConvertWavToAac);
+        using var state = progress.Start(Path.GetFileNameWithoutExtension(outputFile.Name), StageType.ConvertWavToAac);
         await FFMpegArguments
             .FromPipeInput(new StreamPipeSource(wavStream))
             .OutputToFile(outputFile.FullName, true, options => options.WithAudioCodec(AudioCodec.Aac))
@@ -142,7 +132,7 @@ public class FfmpegAudioConverter : IAudioConverter
 
     public async Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
-        using var state = progress.Start(outputFile.Name, StageType.MergingIntoM4b);
+        using var state = progress.Start(Path.GetFileNameWithoutExtension(outputFile.Name), StageType.MergingIntoM4b);
 
         var files = aacChapters.Select(f => f.FullName);
 
@@ -439,7 +429,7 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
 
     private static BookChapter ConvertChapter(Chapter chapter, int index) =>
         new BookChapter(
-            $"{(index + 1):0000} {chapter.FileName}",
+           $"{(index + 1):0000} {chapter.FileName}", // TODO: do we need to add index here and in images?
             chapter.Title,
             chapter.Content);
 
@@ -473,7 +463,7 @@ public class BookConverter(
         {
             Stream? stream = await synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, progress, cancellationToken);
             var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
-            await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, progress, cancellationToken);
+            await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, progress, cancellationToken); // TODO: consider passing Name, for better reporting
         }
 
         foreach (var image in book.Images)
@@ -548,15 +538,16 @@ public record ProgressUpdate(string Scope, StageType CurrentStage, Progress Stat
         var isPartCompleted = State == Progress.Done;
         progress += CurrentStage switch
         {
-            StageType.ConvertTextToWav or StageType.ConvertWavToAac => StageProgrees(Scope, book.Chapters, isPartCompleted),
-            StageType.SavingImage => StageProgrees(Scope, book.Images, isPartCompleted),
+            StageType.ConvertTextToWav => StageProgrees(Scope, book.Chapters, static c => c.Name, static c => c.Content.Length, isPartCompleted),
+            StageType.ConvertWavToAac => StageProgrees(Scope, book.Chapters, static c => c.FileName, static c => c.Content.Length, isPartCompleted),
+            StageType.SavingImage => StageProgrees(Scope, book.Images, static g => g.FileName, static g => g.Content.Length, isPartCompleted),
             _ => isPartCompleted ? currentStageValue : 0
         };
 
         return ToPercentage(progress);
     }
 
-    private static double StageProgrees<T>(string scope, IEnumerable<T> parts, bool isPartCompleted) where T : BookElement
+    private static double StageProgrees<T>(string scope, IEnumerable<T> parts, Func<T, string> getScopeName, Func<T, int> getSize, bool isPartCompleted)
     {
         bool afterCurrent = false;
         double progress = 0;
@@ -564,22 +555,23 @@ public record ProgressUpdate(string Scope, StageType CurrentStage, Progress Stat
 
         foreach (var part in parts)
         {
-            total += part.Size;
+            var size = getSize(part);
+            total +=  size;
             if (afterCurrent)
             {
                 continue;
             }
-            else if (part.FileName == scope)
+            else if (getScopeName(part) == scope)
             {
                 afterCurrent = true;
                 if (isPartCompleted)
                 {
-                    progress += part.Size;
+                    progress += size;
                 }
             }
         }
 
-        Debug.Assert(!afterCurrent, "Current scope was not found.");
+        Debug.Assert(afterCurrent, "Current scope was not found.");
 
         return progress / total;
     }

@@ -52,7 +52,10 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private bool isGenerating;
     private bool isPlaying;
     private BookViewModel? book;
+    private Book? latestBookState;
     private VoiceInfo? selectedVoice;
+    private int progressPercentage;
+    private string progressMessage = "";
 
     public BookViewModel? Book {
         get => book;
@@ -63,6 +66,10 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             [SaveImageAsCommand, AddImageCommand, PlayOrStopCommand, GenerateCommand]); }
 
     public bool IsGenerating { get => isGenerating; private set => SetAndRaise(ref isGenerating, value); }
+
+    public int ProgressPercentage { get => progressPercentage; private set => SetAndRaise(ref progressPercentage, value); }
+
+    public string ProgressMessage { get => progressMessage; private set => SetAndRaise(ref progressMessage, value); }
 
     public bool IsPlaying { get => isPlaying; private set => SetAndRaise(ref isPlaying, value, [nameof(PlayStopIcon), nameof(PlayStopToolTip)], []); }
 
@@ -241,6 +248,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         var converter = new BookConverter(bookParser, audioSynthesizer, new FfmpegAudioConverter(), new NullLogger<BookConverter>());
 
         var updatedBook = Book.CreateUpdatedModel();
+        latestBookState = updatedBook;
 
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
@@ -280,34 +288,35 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     private void ProgressUpdate(ProgressUpdate progress)
     {
-        if (Book == null)
+        if (Book == null || latestBookState == null)
         {
             return;
         }
 
-        var progressPercentage = progress.GetPercentage(Book);
+        ProgressPercentage = progress.GetPercentage(latestBookState);
 
-        var messageTemplate = progress.CurrentStage switch
+        var stageMessage = progress.CurrentStage switch
         {
-            StageType.ConvertTextToWav => Resources.ProgressMessage,
-            StageType.ConvertWavToAac => throw new NotImplementedException(),
-            StageType.SavingImage => throw new NotImplementedException(),
-            StageType.MergingIntoM4b => throw new NotImplementedException(),
-            StageType.UpdatingM4bMetadata => throw new NotImplementedException(),
-            StageType.Installing => throw new NotImplementedException(),
+            StageType.ConvertTextToWav => Resources.ConvertTextToWavMessage,
+            StageType.ConvertWavToAac => Resources.ConvertWavToAacMessage,
+            StageType.SavingImage => Resources.SavingImageMessage,
+            StageType.MergingIntoM4b => Resources.MergingIntoM4bMessage,
+            StageType.UpdatingM4bMetadata => Resources.UpdatingM4bMetadataMessage,
+            StageType.Installing => Resources.InstallingMessage,
+            _ => throw new ArgumentOutOfRangeException($"Unexpected enum value {nameof(progress.CurrentStage)}")
         };
 
-        var message = string.Format(messageTemplate, progress.Scope);
+        var scopeMessage = string.IsNullOrEmpty(progress.Scope) ? " " : $" \"{progress.Scope}\" ";
 
         var stateMessage = progress.State switch
         {
-            ProgressState.Started => Resources.ProgressStarted,
-            ProgressState.Completed => Resources.ProgressCompleted,
-            ProgressState.Failed => Resources.ProgressFailed,
-            _ => throw new ArgumentOutOfRangeException(nameof(progress.State), progress.State, null)
+            Progress.Started => Resources.StartedMessage,
+            Progress.Failed => Resources.FailedMessage,
+            Progress.Done => Resources.DoneMessage,
+            _ => throw new ArgumentOutOfRangeException($"Unexpected enum value {nameof(progress.State)}")
         };
 
-        return message + stateMessage;
+        ProgressMessage = $"{stageMessage}{scopeMessage}{stateMessage}";
     }
 }
 
