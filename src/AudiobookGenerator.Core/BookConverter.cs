@@ -1,19 +1,21 @@
-﻿using System.Speech.Synthesis;
-using FFMpegCore;
-using FFMpegCore.Pipes;
+﻿using FFMpegCore;
 using FFMpegCore.Enums;
-using System.Diagnostics;
-using TagLib;
-using VersOne.Epub;
-using VersOne.Epub.Options;
+using FFMpegCore.Pipes;
+
+using HtmlAgilityPack;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Text.RegularExpressions;
-using HtmlAgilityPack;
-using System.Collections.Frozen;
-using System.Drawing;
 using Microsoft.Playwright;
-using System.Xml.Linq;
+
+using System.Diagnostics;
+using System.Speech.Synthesis;
+using System.Text.RegularExpressions;
+
+using TagLib;
+
+using VersOne.Epub;
+using VersOne.Epub.Options;
 
 namespace YewCone.AudiobookGenerator.Core;
 
@@ -88,11 +90,11 @@ internal static class DirectoryInfoExtension
 
 public class FfmpegAudioConverter : IAudioConverter
 {
-    private Task?  initializeTask;
+    private Task? initializeTask;
 
     public Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
-        static Picture ByteToPicture(byte[] bytes) => new (new ByteVector(bytes));
+        static Picture ByteToPicture(byte[] bytes) => new(new ByteVector(bytes));
 
         using var state = progress.Start(Path.GetFileNameWithoutExtension(m4bFile.Name), StageType.UpdatingM4bMetadata);
 
@@ -123,7 +125,7 @@ public class FfmpegAudioConverter : IAudioConverter
     {
         await EnsureInitializedAsync(progress, cancellationToken).ConfigureAwait(false);
         using var state = progress.Start(Path.GetFileNameWithoutExtension(outputFile.Name), StageType.ConvertWavToAac);
-        await FFMpegArguments
+        _ = await FFMpegArguments
             .FromPipeInput(new StreamPipeSource(wavStream))
             .OutputToFile(outputFile.FullName, true, options => options.WithAudioCodec(AudioCodec.Aac))
             .ProcessAsynchronously()
@@ -159,7 +161,7 @@ public class FfmpegAudioConverter : IAudioConverter
         }
 
         await EnsureInitializedAsync(progress, cancellationToken).ConfigureAwait(false);
-        await FFMpegArguments
+        _ = await FFMpegArguments
             .FromConcatInput(files)
             .AddFileInput(chaptersFile)
             .OutputToFile(outputFile.FullName, true)
@@ -167,7 +169,7 @@ public class FfmpegAudioConverter : IAudioConverter
             .ConfigureAwait(false);
     }
 
-    public Task InitializeAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
+    public async Task InitializeAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
         using var state = progress.Start("FFmpeg", StageType.Installing);
         Process process = new();
@@ -176,8 +178,8 @@ public class FfmpegAudioConverter : IAudioConverter
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.CreateNoWindow = true;
-        process.Start();
-        return process.WaitForExitAsync(cancellationToken);
+        _ = process.Start();
+        await process.WaitForExitAsync(cancellationToken);
     }
 
     private Task EnsureInitializedAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken) => initializeTask ??= InitializeAsync(progress, cancellationToken);
@@ -195,7 +197,7 @@ public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAud
         builder.AppendText(text);
         _speechSynthesizer.SelectVoice(voice.Name);
         _speechSynthesizer.SpeakAsyncCancelAll();
-        _speechSynthesizer.SpeakAsync(builder);
+        _ = _speechSynthesizer.SpeakAsync(builder);
     }
 
     public void StopSpeaking() => _speechSynthesizer.SpeakAsyncCancelAll();
@@ -241,7 +243,7 @@ public class PlaywrightHtmlConverter(ILogger<PlaywrightHtmlConverter> logger) : 
     {
         if (_browser == null)
         {
-            Microsoft.Playwright.Program.Main(["install"]);
+            _ = Microsoft.Playwright.Program.Main(["install"]);
             _playwright = await Playwright.CreateAsync().ConfigureAwait(false);
             _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true }).ConfigureAwait(false);
         }
@@ -266,7 +268,7 @@ public class PlaywrightHtmlConverter(ILogger<PlaywrightHtmlConverter> logger) : 
 
         await page.SetContentAsync(htmlContent).ConfigureAwait(false);
 
-        await page.EvaluateAsync(@"() => {
+        _ = await page.EvaluateAsync(@"() => {
                 const images = document.querySelectorAll('img');
                 images.forEach(img => {
                     const altText = 'book image:' + img.getAttribute('alt') + ' file name ' + img.getAttribute('src')?.split('/').pop();
@@ -419,7 +421,7 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
         var (parsedTitle, content) = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
         var fileName = Path.GetFileNameWithoutExtension(chapter.FileName);
         var title = string.IsNullOrEmpty(chapter.Title)
-            ? string.IsNullOrEmpty(parsedTitle) 
+            ? string.IsNullOrEmpty(parsedTitle)
                 ? fileName
                 : parsedTitle
             : chapter.Title;
@@ -470,7 +472,7 @@ public class BookConverter(
         {
             var path = imageDir.GetSubPath(image.FileName);
             logger.LogInformation($"Saving file {image.FileName}", ConsoleColor.Green);
-            using (var stage = progress.Start(image.FileName, StageType.SavingImage)) 
+            using (var stage = progress.Start(image.FileName, StageType.SavingImage))
             {
                 System.IO.File.WriteAllBytes(path, image.Content);
             }
@@ -502,34 +504,34 @@ public class ActionProgress<T>(Action<T> reportAction) : IProgress<T>
     public void Report(T value) => reportAction(value);
 }
 
-internal static class ProgressExtensions 
+internal static class ProgressExtensions
 {
-    public static IDisposable Start(this IProgress<ProgressUpdate> progress, string scope, StageType currentStage) 
+    public static IDisposable Start(this IProgress<ProgressUpdate> progress, string scope, StageType currentStage)
     {
-        progress.Report(new (scope, currentStage, Progress.Started));
+        progress.Report(new(scope, currentStage, Progress.Started));
         return new DisposeAction(progress, scope, currentStage);
     }
 
     private class DisposeAction(IProgress<ProgressUpdate> progress, string scope, StageType stage) : IDisposable
     {
-        public void Dispose() => progress.Report(new (scope, stage, Progress.Done));
+        public void Dispose() => progress.Report(new(scope, stage, Progress.Done));
     }
 }
 
-public record ProgressUpdate(string Scope, StageType CurrentStage, Progress State) 
+public record ProgressUpdate(string Scope, StageType CurrentStage, Progress State)
 {
     public int GetPercentage(Book book)
     {
         double progress = 0;
         double currentStageValue = 0;
-        foreach (var stage in stageValues) 
+        foreach (var stage in stageValues)
         {
             currentStageValue = stage.Value;
-            if (CurrentStage == stage.Type) 
+            if (CurrentStage == stage.Type)
             {
                 break;
             }
-            else 
+            else
             {
                 progress += currentStageValue;
             }
@@ -556,7 +558,7 @@ public record ProgressUpdate(string Scope, StageType CurrentStage, Progress Stat
         foreach (var part in parts)
         {
             var size = getSize(part);
-            total +=  size;
+            total += size;
             if (afterCurrent)
             {
                 continue;
@@ -598,20 +600,20 @@ public enum StageType
     Installing
 }
 
-public enum Progress 
+public enum Progress
 {
     Started,
     Done,
     Failed
 }
 
-public interface IState<T> 
+public interface IState<T>
 {
     public int Current { get; }
 
     public int Total { get; }
 
-    public void Report(T current) 
+    public void Report(T current)
     {
 
     }

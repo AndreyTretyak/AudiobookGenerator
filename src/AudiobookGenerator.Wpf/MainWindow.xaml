@@ -97,7 +97,9 @@
                         <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
                     </Hyperlink>
                 </TextBlock>
-                <Button DockPanel.Dock="Right" Command="{Binding PlayOrStopCommand, Mode=OneTime}">
+                <Button DockPanel.Dock="Right"
+                    Command="{Binding PlayOrStopCommand, Mode=OneTime}" 
+                    Visibility="{Binding IsVoiceSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <TextBlock FontFamily="{StaticResource SymbolThemeFontFamily}"
                         Text="{Binding PlayStopIcon, Mode=OneWay}"
                         ToolTip="{Binding PlayStopToolTip, Mode=OneWay}"/>

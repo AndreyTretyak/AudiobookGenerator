@@ -208,6 +208,6 @@
     <value>failed</value>
   </data>
   <data name="DoneMessage" xml:space="preserve">
-    <value>done</value>
+    <value>finishing</value>
   </data>
 </root>

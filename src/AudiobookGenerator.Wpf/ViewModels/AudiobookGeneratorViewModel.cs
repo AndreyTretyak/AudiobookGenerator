@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging.Abstractions;
+
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -8,7 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Speech.Synthesis;
 using System.Windows;
 using System.Windows.Input;
-using TagLib.IFD;
+
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Wpf.ViewModels;
@@ -33,7 +34,7 @@ internal class BaseViewModel : INotifyPropertyChanged
         {
             Raise(property);
         }
-        foreach (var command in commands) 
+        foreach (var command in commands)
         {
             command.RaiseCanExecuteChanged();
         }
@@ -57,13 +58,15 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private int progressPercentage;
     private string progressMessage = "";
 
-    public BookViewModel? Book {
+    public BookViewModel? Book
+    {
         get => book;
         private set => SetAndRaise(
             ref book,
             value,
             [nameof(IsBookSelected), nameof(ShowBookSelection), nameof(TextContentSectionHeader), nameof(ImagesSectionHeader)],
-            [SaveImageAsCommand, AddImageCommand, PlayOrStopCommand, GenerateCommand]); }
+            [SaveImageAsCommand, AddImageCommand, PlayOrStopCommand, GenerateCommand]);
+    }
 
     public bool IsGenerating { get => isGenerating; private set => SetAndRaise(ref isGenerating, value); }
 
@@ -77,7 +80,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public string PlayStopToolTip { get => isPlaying ? Resources.StopToolTip : Resources.PlayTooltip; }
 
-    public VoiceInfo? SelectedVoice { get => selectedVoice; set => SetAndRaise(ref selectedVoice, value, [], [PlayOrStopCommand, GenerateCommand]); }
+    public VoiceInfo? SelectedVoice { get => selectedVoice; set => SetAndRaise(ref selectedVoice, value, [nameof(IsVoiceSelected)], [PlayOrStopCommand, GenerateCommand]); }
 
     public ObservableCollection<VoiceInfo> Voices { get; }
 
@@ -114,7 +117,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         SelectBookCommand = new DelegateCommand(SelectBookAsync);
         PlayOrStopCommand = new DelegateCommand(PlayOrStopAsync, parameter => this.IsVoiceSelected && this.Book != null && this.Book.SelectedChapter != null);
 
-        Func<object?, bool> canExecuteWhenBookSelected = parameter => this.IsBookSelected;
+        bool canExecuteWhenBookSelected(object? parameter) => this.IsBookSelected;
         SaveImageAsCommand = new DelegateCommand(SaveImageAsAsync, canExecuteWhenBookSelected);
         AddImageCommand = new DelegateCommand(AddImageAsync, canExecuteWhenBookSelected);
 
@@ -125,7 +128,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     private Task ShowHowToAddVoiceAsync(object? parameter)
     {
-        Process.Start(new ProcessStartInfo(Resources.AddVoiceLink) { UseShellExecute = true });
+        _ = Process.Start(new ProcessStartInfo(Resources.AddVoiceLink) { UseShellExecute = true });
         return Task.CompletedTask;
     }
 
@@ -158,7 +161,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             ],
             book.Chapters,
             book.Images,
-            book.CoverImage != null 
+            book.CoverImage != null
                 ? book.Images.FirstOrDefault(i => Enumerable.SequenceEqual(i.Content.Take(coverComparePresession), book.CoverImage.Take(coverComparePresession)))
                 : null
                     ?? book.Images.FirstOrDefault());
@@ -177,7 +180,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         {
             audioSynthesizer.Speak(Book.SelectedChapter.Content, SelectedVoice);
         }
-        else 
+        else
         {
             audioSynthesizer.StopSpeaking();
         }
@@ -378,12 +381,12 @@ internal class ChapterViewModel(string title, string content)
 internal record PropertyViewModel(BookPropertyType Type, string Value)
 {
     public string Name => Type switch
-        {
-            BookPropertyType.Title => Resources.TitleProperty,
-            BookPropertyType.Description => Resources.DescriptionProperty,
-            BookPropertyType.Authors => Resources.AuthorsProperties,
-            _ => Type.ToString()
-        };
+    {
+        BookPropertyType.Title => Resources.TitleProperty,
+        BookPropertyType.Description => Resources.DescriptionProperty,
+        BookPropertyType.Authors => Resources.AuthorsProperties,
+        _ => Type.ToString()
+    };
 }
 
 internal record LogMessage(string Text, Color Color);
@@ -402,7 +405,7 @@ internal class DelegateCommand(Func<object?, Task> execute, Func<object?, bool>?
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.ToString(), "Error", MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.None);
+            _ = MessageBox.Show(ex.ToString(), "Error", MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.None);
         }
     }
 
