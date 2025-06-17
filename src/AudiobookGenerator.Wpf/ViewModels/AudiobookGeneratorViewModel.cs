@@ -286,6 +286,12 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             new ActionProgress<ProgressUpdate>(ProgressUpdate),
             CancellationToken.None);
 
+        if (output.Directory != null)
+        {
+            // Open the directory where the audiobook was saved
+            _ = Process.Start(new ProcessStartInfo(output.Directory.FullName) { UseShellExecute = true });
+        }
+
         IsGenerating = false;
     }
 
