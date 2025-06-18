@@ -210,4 +210,7 @@
   <data name="DoneMessage" xml:space="preserve">
     <value>finishing</value>
   </data>
+  <data name="BookOpenError" xml:space="preserve">
+    <value>Error when opening book</value>
+  </data>
 </root>

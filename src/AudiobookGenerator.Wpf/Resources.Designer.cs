@@ -106,6 +106,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Error when opening book.
+        /// </summary>
+        public static string BookOpenError {
+            get {
+                return ResourceManager.GetString("BookOpenError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Please select ebook file.
         /// </summary>
         public static string BookPathPlaceholder {

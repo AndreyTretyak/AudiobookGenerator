@@ -13,7 +13,10 @@
         Width="800"
         Height="580"
         d:DataContext="{d:DesignInstance viewModels:AudiobookGeneratorViewModel, IsDesignTimeCreatable=False}"
-        Title="{x:Static local:Resources.AppName}" >
+        Title="{x:Static local:Resources.AppName}"
+        AllowDrop="True"
+        DragOver="HandleDragOver"
+        Drop="HandleDrop">
     <Window.Resources>
         <Style TargetType="{x:Type Button}" BasedOn="{StaticResource DefaultButtonStyle}" >
             <Setter Property="VerticalAlignment" Value="Stretch" />
@@ -126,18 +129,20 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <ListBox
-                        Grid.Column="0"
-                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                        ScrollViewer.VerticalScrollBarVisibility="Auto"
-                        ItemsSource="{Binding Book.Chapters}"
-                        SelectedItem="{Binding Book.SelectedChapter}"/>
+                            Grid.Column="0"
+                            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto" 
+                            ItemsSource="{Binding Book.Chapters}"
+                            SelectedItem="{Binding Book.SelectedChapter}"/>
                         <GridSplitter Grid.Row="1" Width="5" VerticalAlignment="Stretch" />
-                        <ScrollViewer
-                        Grid.Column="2"
-                        VerticalScrollBarVisibility="Auto"
-                        HorizontalScrollBarVisibility="Disabled">
-                            <TextBox Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}" TextWrapping="Wrap" />
-                        </ScrollViewer>
+                            <ScrollViewer
+                                Grid.Column="2"
+                                VerticalScrollBarVisibility="Auto"
+                                HorizontalScrollBarVisibility="Disabled">
+                                    <TextBox
+                                        Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
+                                        TextWrapping="Wrap" />
+                            </ScrollViewer>
                     </Grid>
                 </TabItem>
                 <TabItem Header="{Binding ImagesSectionHeader, Mode=OneWay}">
@@ -146,14 +151,14 @@
                             <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
                             <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
                                 <TextBlock>
-                            <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
-                            <Run Text="{x:Static local:Resources.AddImageLable}"/>
+                                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
+                                    <Run Text="{x:Static local:Resources.AddImageLable}"/>
                                 </TextBlock>
                             </Button>
-                            <Button DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
+                            <Button Margin="0 0 5 0"  DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
                                 <TextBlock>
-                            <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
-                            <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
+                                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
+                                    <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
                                 </TextBlock>
                             </Button>
                             <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
