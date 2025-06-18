@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="LICENSE" />
+    <File Path="NuGet.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="src/AudiobookGenerator.Console/YewCone.AudiobookGenerator.Console.csproj" />
+  <Project Path="src/AudiobookGenerator.Core/YewCone.AudiobookGenerator.Core.csproj" />
+  <Project Path="src/AudiobookGenerator.Wpf/YewCone.AudiobookGenerator.Wpf.csproj" />
+</Solution>
