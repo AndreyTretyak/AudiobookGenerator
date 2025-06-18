@@ -540,16 +540,16 @@ public record ProgressUpdate(string Scope, StageType CurrentStage, Progress Stat
         var isPartCompleted = State == Progress.Done;
         progress += CurrentStage switch
         {
-            StageType.ConvertTextToWav => StageProgrees(Scope, book.Chapters, static c => c.Name, static c => c.Content.Length, isPartCompleted),
-            StageType.ConvertWavToAac => StageProgrees(Scope, book.Chapters, static c => c.FileName, static c => c.Content.Length, isPartCompleted),
-            StageType.SavingImage => StageProgrees(Scope, book.Images, static g => g.FileName, static g => g.Content.Length, isPartCompleted),
+            StageType.ConvertTextToWav => StageProgress(Scope, book.Chapters, static c => c.Name, static c => c.Content.Length, isPartCompleted),
+            StageType.ConvertWavToAac => StageProgress(Scope, book.Chapters, static c => c.FileName, static c => c.Content.Length, isPartCompleted),
+            StageType.SavingImage => StageProgress(Scope, book.Images, static g => g.FileName, static g => g.Content.Length, isPartCompleted),
             _ => isPartCompleted ? currentStageValue : 0
         };
 
         return ToPercentage(progress);
     }
 
-    private static double StageProgrees<T>(string scope, IEnumerable<T> parts, Func<T, string> getScopeName, Func<T, int> getSize, bool isPartCompleted)
+    private static double StageProgress<T>(string scope, IEnumerable<T> parts, Func<T, string> getScopeName, Func<T, int> getSize, bool isPartCompleted)
     {
         bool afterCurrent = false;
         double progress = 0;
