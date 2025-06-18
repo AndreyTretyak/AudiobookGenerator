@@ -315,7 +315,7 @@ public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> 
 
             foreach (var (original, replacement) in replaceNodes)
             {
-                original.ParentNode.ReplaceChild(replacement, original);
+                _ = original.ParentNode.ReplaceChild(replacement, original);
             }
         }
 
