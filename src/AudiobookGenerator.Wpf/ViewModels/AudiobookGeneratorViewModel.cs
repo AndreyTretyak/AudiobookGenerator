@@ -43,8 +43,10 @@ internal class BaseViewModel : INotifyPropertyChanged
 
 internal class AudiobookGeneratorViewModel : BaseViewModel
 {
-    private const string supportedBookFormatFilter = "Electronic Publication Book (.epub)|*.epub";
-    private const string supportedAudiobookFormatFilter = "M4B audio book format (.m4b)|*.m4b";
+    private const string ebookSupportedExtension = ".epub";
+    private const string audiobookSupportedExtension = ".m4b";
+    private const string supportedBookFormatFilter = $"Electronic Publication Book (.{ebookSupportedExtension})|*{ebookSupportedExtension}";
+    private const string supportedAudiobookFormatFilter = $"M4B audio book format ({audiobookSupportedExtension})|*{audiobookSupportedExtension}";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
     private const int coverComparePrecision = 10000;
     private readonly IAudioSynthesizer audioSynthesizer;
@@ -148,23 +150,39 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var file = new FileInfo(dialog.FileName);
 
-        Mouse.OverrideCursor = Cursors.Wait;
-        var book = await bookParser.ParseAsync(file, CancellationToken.None);
-        Mouse.OverrideCursor = null;
+        await OpenBookAsync(file);
+    }
 
-        Book = new BookViewModel(
-            file,
-            [
-                new PropertyViewModel(BookPropertyType.Title, book.Title),
-                new PropertyViewModel(BookPropertyType.Description, book.Description),
-                new PropertyViewModel(BookPropertyType.Authors, string.Join(BookViewModel.authorsSeparator, book.AuthorList)),
-            ],
-            book.Chapters,
-            book.Images,
-            book.CoverImage != null
-                ? book.Images.FirstOrDefault(i => Enumerable.SequenceEqual(i.Content.Take(coverComparePrecision), book.CoverImage.Take(coverComparePrecision)))
-                : null
-                    ?? book.Images.FirstOrDefault());
+    public async Task OpenBookAsync(FileInfo bookFile)
+    {
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            var book = await bookParser.ParseAsync(bookFile, CancellationToken.None);
+
+            Book = new BookViewModel(
+                bookFile,
+                [
+                    new PropertyViewModel(BookPropertyType.Title, book.Title),
+                    new PropertyViewModel(BookPropertyType.Description, book.Description),
+                    new PropertyViewModel(BookPropertyType.Authors, string.Join(BookViewModel.authorsSeparator, book.AuthorList)),
+                ],
+                book.Chapters,
+                book.Images,
+                book.CoverImage != null
+                    ? book.Images.FirstOrDefault(i => Enumerable.SequenceEqual(i.Content.Take(coverComparePrecision), book.CoverImage.Take(coverComparePrecision)))
+                    : null
+                        ?? book.Images.FirstOrDefault());
+        }
+        catch (Exception ex)
+        {
+            ShowError(Resources.BookOpenError, ex);
+            Book = null;
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
     }
 
     private Task PlayOrStopAsync(object? parameter)
@@ -246,8 +264,6 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             return;
         }
 
-        var audiobookExtension = ".m4b";
-
         var converter = new BookConverter(bookParser, audioSynthesizer, new FfmpegAudioConverter(), new NullLogger<BookConverter>());
 
         var updatedBook = Book.CreateUpdatedModel();
@@ -255,8 +271,8 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            FileName = Path.ChangeExtension(updatedBook.FileName, audiobookExtension),
-            DefaultExt = audiobookExtension,
+            FileName = Path.ChangeExtension(updatedBook.FileName, audiobookSupportedExtension),
+            DefaultExt = audiobookSupportedExtension,
             Filter = supportedAudiobookFormatFilter
         };
 
@@ -271,9 +287,9 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         var output = new FileInfo(dialog.FileName);
 
-        if (output.Extension != audiobookExtension)
+        if (!string.Equals(output.Extension, audiobookSupportedExtension, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException($"We can only produce .{audiobookExtension} files, not {output.Extension}.");
+            throw new InvalidOperationException($"We can only produce {audiobookSupportedExtension} files, not {output.Extension}.");
         }
 
         var tmpFiles = output.Directory ?? new DirectoryInfo(Path.GetTempPath());
@@ -288,7 +304,6 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         if (output.Directory != null)
         {
-            // Open the directory where the audiobook was saved
             _ = Process.Start(new ProcessStartInfo(output.Directory.FullName) { UseShellExecute = true });
         }
 
@@ -327,6 +342,16 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         ProgressMessage = $"{stageMessage}{scopeMessage}{stateMessage}";
     }
+
+    private static void ShowError(string title, Exception exception) => ShowError(title, exception.ToString());
+
+    private static void ShowError(string title, string message)
+    {
+        // TODO log error
+        _ = MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.None);
+    }
+
+    public static bool IsEbookExtensionSupported(string filePath) => string.Equals(ebookSupportedExtension, Path.GetExtension(filePath), StringComparison.OrdinalIgnoreCase);
 }
 
 internal class BookViewModel : BaseViewModel
@@ -335,7 +360,8 @@ internal class BookViewModel : BaseViewModel
     private BookChapter? selectedChapter;
     private BookImage? cover;
 
-    public BookViewModel(FileInfo path,
+    public BookViewModel(
+        FileInfo path,
         IEnumerable<PropertyViewModel> properties,
         IEnumerable<BookChapter> chapters,
         IEnumerable<BookImage> images,
