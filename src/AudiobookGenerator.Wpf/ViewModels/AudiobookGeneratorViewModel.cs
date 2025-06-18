@@ -46,7 +46,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private const string ebookSupportedExtension = ".epub";
     private const string audiobookSupportedExtension = ".m4b";
     private const string supportedBookFormatFilter = $"Electronic Publication Book (.{ebookSupportedExtension})|*{ebookSupportedExtension}";
-    private const string supportedAudiobookFormatFilter = $"M4B audio book format (.{audiobookSupportedExtension})|*.{audiobookSupportedExtension}";
+    private const string supportedAudiobookFormatFilter = $"M4B audio book format ({audiobookSupportedExtension})|*{audiobookSupportedExtension}";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
     private const int coverComparePrecision = 10000;
     private readonly IAudioSynthesizer audioSynthesizer;
