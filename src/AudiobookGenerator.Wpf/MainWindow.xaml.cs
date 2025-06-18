@@ -7,51 +7,50 @@ using System.Windows;
 using YewCone.AudiobookGenerator.Core;
 using YewCone.AudiobookGenerator.Wpf.ViewModels;
 
-namespace YewCone.AudiobookGenerator.Wpf
+namespace YewCone.AudiobookGenerator.Wpf;
+
+public partial class MainWindow : Window
 {
-    public partial class MainWindow : Window
+    private AudiobookGeneratorViewModel? viewModel;
+
+    public MainWindow()
     {
-        private AudiobookGeneratorViewModel? viewModel;
+        IHtmlConverter converter = true
+            ? new HtmlAgilityPackHtmlConverter(new NullLogger<HtmlAgilityPackHtmlConverter>())
+            : new PlaywrightHtmlConverter(new NullLogger<PlaywrightHtmlConverter>());
 
-        public MainWindow()
+        var parser = new VersOneEpubBookParser(converter, new NullLogger<VersOneEpubBookParser>());
+        var synthesizer = new LocalAudioSynthesizer(new NullLogger<LocalAudioSynthesizer>());
+
+        DataContext = viewModel = new AudiobookGeneratorViewModel(parser, synthesizer);
+        InitializeComponent();
+    }
+
+    private void HandleDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = viewModel != null && IsDragSupported(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void HandleDrop(object sender, DragEventArgs e)
+    {
+        if (viewModel != null && IsDragSupported(e, out var file))
         {
-            IHtmlConverter converter = true
-                ? new HtmlAgilityPackHtmlConverter(new NullLogger<HtmlAgilityPackHtmlConverter>())
-                : new PlaywrightHtmlConverter(new NullLogger<PlaywrightHtmlConverter>());
-
-            var parser = new VersOneEpubBookParser(converter, new NullLogger<VersOneEpubBookParser>());
-            var synthesizer = new LocalAudioSynthesizer(new NullLogger<LocalAudioSynthesizer>());
-
-            DataContext = viewModel = new AudiobookGeneratorViewModel(parser, synthesizer);
-            InitializeComponent();
+            await viewModel.OpenBookAsync(file);
         }
+    }
 
-        private void HandleDragOver(object sender, DragEventArgs e)
+    private static bool IsDragSupported(DragEventArgs e, [NotNullWhen(true)] out FileInfo? file)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop)
+            && e.Data.GetData(DataFormats.FileDrop) is string[] files
+            && files is [var filePath, ..]
+            && AudiobookGeneratorViewModel.IsEbookExtensionSupported(filePath))
         {
-            e.Effects = viewModel != null && IsDragSupported(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
-            e.Handled = true;
+            file = new FileInfo(filePath);
+            return true;
         }
-
-        private async void HandleDrop(object sender, DragEventArgs e)
-        {
-            if (viewModel != null && IsDragSupported(e, out var file))
-            {
-                await viewModel.OpenBookAsync(file);
-            }
-        }
-
-        private static bool IsDragSupported(DragEventArgs e, [NotNullWhen(true)] out FileInfo? file)
-        {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop)
-                && e.Data.GetData(DataFormats.FileDrop) is string[] files
-                && files is [var filePath, ..]
-                && AudiobookGeneratorViewModel.IsEbookExtensionSupported(filePath))
-            {
-                file = new FileInfo(filePath);
-                return true;
-            }
-            file = null;
-            return false;
-        }
+        file = null;
+        return false;
     }
 }
