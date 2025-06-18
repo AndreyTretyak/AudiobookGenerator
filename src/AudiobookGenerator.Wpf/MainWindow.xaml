@@ -139,10 +139,13 @@
                                 Grid.Column="2"
                                 VerticalScrollBarVisibility="Auto"
                                 HorizontalScrollBarVisibility="Disabled">
-                                    <TextBox
-                                        Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
-                                        TextWrapping="Wrap" />
-                            </ScrollViewer>
+                                <TextBox Grid.Column="2"
+                                    AllowDrop="True"
+                                    PreviewDragOver="HandleDragOver"
+                                    Drop="HandleDrop"
+                                    Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
+                                    TextWrapping="Wrap" />
+                        </ScrollViewer>
                     </Grid>
                 </TabItem>
                 <TabItem Header="{Binding ImagesSectionHeader, Mode=OneWay}">

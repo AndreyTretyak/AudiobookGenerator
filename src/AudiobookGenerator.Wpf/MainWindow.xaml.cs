@@ -40,8 +40,6 @@ namespace YewCone.AudiobookGenerator.Wpf
             }
         }
 
-        private void PassThroughDrag(object sender, DragEventArgs e) => e.Handled = true;
-
         private static bool IsDragSupported(DragEventArgs e, [NotNullWhen(true)] out FileInfo? file)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop)
