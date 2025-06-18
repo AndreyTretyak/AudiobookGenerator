@@ -19,7 +19,7 @@ namespace YewCone.AudiobookGenerator.Wpf {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Resources {
@@ -133,6 +133,24 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Converting text to wav for.
+        /// </summary>
+        public static string ConvertTextToWavMessage {
+            get {
+                return ResourceManager.GetString("ConvertTextToWavMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Converting wav to aac for.
+        /// </summary>
+        public static string ConvertWavToAacMessage {
+            get {
+                return ResourceManager.GetString("ConvertWavToAacMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Cover Image.
         /// </summary>
         public static string CoverImageLable {
@@ -156,6 +174,24 @@ namespace YewCone.AudiobookGenerator.Wpf {
         public static string DetailsSectionHeader {
             get {
                 return ResourceManager.GetString("DetailsSectionHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to finishing.
+        /// </summary>
+        public static string DoneMessage {
+            get {
+                return ResourceManager.GetString("DoneMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to failed.
+        /// </summary>
+        public static string FailedMessage {
+            get {
+                return ResourceManager.GetString("FailedMessage", resourceCulture);
             }
         }
         
@@ -187,6 +223,24 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Installing component.
+        /// </summary>
+        public static string InstallingMessage {
+            get {
+                return ResourceManager.GetString("InstallingMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Merging files into m4b.
+        /// </summary>
+        public static string MergingIntoM4bMessage {
+            get {
+                return ResourceManager.GetString("MergingIntoM4bMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Please select ebook file.
         /// </summary>
         public static string NoBookPathPlaceholder {
@@ -214,11 +268,29 @@ namespace YewCone.AudiobookGenerator.Wpf {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Saving image.
+        /// </summary>
+        public static string SavingImageMessage {
+            get {
+                return ResourceManager.GetString("SavingImageMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Select Voice.
         /// </summary>
         public static string SelectVoiceLable {
             get {
                 return ResourceManager.GetString("SelectVoiceLable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to started.
+        /// </summary>
+        public static string StartedMessage {
+            get {
+                return ResourceManager.GetString("StartedMessage", resourceCulture);
             }
         }
         
@@ -246,6 +318,15 @@ namespace YewCone.AudiobookGenerator.Wpf {
         public static string TitleProperty {
             get {
                 return ResourceManager.GetString("TitleProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updating m4b metadata.
+        /// </summary>
+        public static string UpdatingM4bMetadataMessage {
+            get {
+                return ResourceManager.GetString("UpdatingM4bMetadataMessage", resourceCulture);
             }
         }
         
