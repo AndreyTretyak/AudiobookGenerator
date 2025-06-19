@@ -6,6 +6,11 @@
     <UseWPF>true</UseWPF>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
+  <PropertyGroup Label="Publish">
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AudiobookGenerator.Core\YewCone.AudiobookGenerator.Core.csproj" />
     <PackageReference Include="VersOne.Epub"/>
