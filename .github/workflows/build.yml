@@ -28,7 +28,7 @@ jobs:
         global-json-file: global.json
 
     - name: Publish
-      run: dotnet publish --runtime $env:Runtime
+      run: dotnet publish --runtime ${{ matrix.runtime }}
 
     - name: Publish Self Contained
       run: dotnet publish --runtime ${{ matrix.runtime }} --self-contained
