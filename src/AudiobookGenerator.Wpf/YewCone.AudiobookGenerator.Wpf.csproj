@@ -10,6 +10,8 @@
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ArtifactsPivots>$(RuntimeIdentifier)</ArtifactsPivots>
+    <ArtifactsPivots Condition="$(SelfContained)">$(ArtifactsPivots)-selfcontained</ArtifactsPivots>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AudiobookGenerator.Core\YewCone.AudiobookGenerator.Core.csproj" />
