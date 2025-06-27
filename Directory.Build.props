@@ -13,4 +13,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <PropertyGroup>
+    <MajorVersion>0</MajorVersion>
+    <VersionSufix Condition="$(GITHUB_REF) != '' AND $(GITHUB_REF) != 'refs/heads/main'">-$(GITHUB_SHA)</VersionSufix>
+    <Version>$(MajorVersion).$([System.DateTime]::UtcNow.ToString("yyMM.ddHH.mmss"))$(VersionSufix)</Version>
+  </PropertyGroup>
 </Project>
