@@ -4,6 +4,7 @@
     <CurrentTargetFramework>net9.0-windows</CurrentTargetFramework>
   </PropertyGroup>
   <PropertyGroup>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsAsErrors />
     <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
@@ -11,10 +12,5 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-  <PropertyGroup Label="Build Output">
-    <BaseOutputPath>$(MSBuildThisFileDirectory)\bin\$(MSBuildProjectName)</BaseOutputPath>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)\obj\$(MSBuildProjectName)</BaseIntermediateOutputPath>
-    <PackageOutputPath>$(MSBuildThisFileDirectory)\nuget</PackageOutputPath>
   </PropertyGroup>
 </Project>
