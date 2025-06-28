@@ -18,4 +18,9 @@
     <VersionSufix Condition="$(GITHUB_REF) != '' AND $(GITHUB_REF) != 'refs/heads/main'">-$(GITHUB_SHA)</VersionSufix>
     <Version>$(MajorVersion).$([System.DateTime]::UtcNow.ToString("yyMM.ddHH.mmss"))$(VersionSufix)</Version>
   </PropertyGroup>
+  <PropertyGroup Label="Signing">
+    <SignAssembly>false</SignAssembly> <!-- disabled until FFMpegCore and VersOne.Epub not signed  -->
+    <DelaySign>false</DelaySign>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)\YewConeOssKey.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
 </Project>
