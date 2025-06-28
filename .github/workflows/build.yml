@@ -31,11 +31,11 @@ jobs:
       run: dotnet publish --runtime ${{ matrix.runtime }}
 
     - name: Publish Self Contained
-      run: dotnet publish --runtime ${{ matrix.runtime }} --self-contained
+      run: dotnet publish --runtime ${{ matrix.runtime }} --no-build --no-restore --self-contained
 
     - name: Upload build artifacts
       if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: $env:Runtime
-        path: artifact/**/YewCone.*.exe
+        path: artifacts/publish/**
