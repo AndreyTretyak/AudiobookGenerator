@@ -8,7 +8,8 @@
     <File Path="NuGet.config" />
     <File Path="README.md" />
   </Folder>
+  <!-- Keep startup project first, so it would be chosen by default -->
+  <Project Path="src/AudiobookGenerator.Wpf/YewCone.AudiobookGenerator.Wpf.csproj" />
   <Project Path="src/AudiobookGenerator.Console/YewCone.AudiobookGenerator.Console.csproj" />
   <Project Path="src/AudiobookGenerator.Core/YewCone.AudiobookGenerator.Core.csproj" />
-  <Project Path="src/AudiobookGenerator.Wpf/YewCone.AudiobookGenerator.Wpf.csproj" />
 </Solution>
