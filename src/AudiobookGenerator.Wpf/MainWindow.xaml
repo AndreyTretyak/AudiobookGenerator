@@ -38,6 +38,9 @@
             </TextBlock>
         </DataTemplate>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <Style x:Key="WrappingTextBlockStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
     </Window.Resources>
     <Grid>
         <Button
@@ -175,8 +178,8 @@
                     ItemsSource="{Binding Book.Properties, Mode=OneWay}"
                     AutoGenerateColumns="False">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Property" Width="*" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Value" Width="*" Binding="{Binding Value}"/>
+                            <DataGridTextColumn Header="Property" Width="*" Binding="{Binding Name, Mode=OneWay}" IsReadOnly="True" ElementStyle="{StaticResource WrappingTextBlockStyle}" />
+                            <DataGridTextColumn Header="Value" Width="*" Binding="{Binding Value}" ElementStyle="{StaticResource WrappingTextBlockStyle}" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
