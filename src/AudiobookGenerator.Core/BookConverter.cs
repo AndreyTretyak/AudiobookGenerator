@@ -6,7 +6,6 @@ using HtmlAgilityPack;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Playwright;
 
 using System.Diagnostics;
 using System.Speech.Synthesis;
@@ -234,59 +233,6 @@ public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAud
     }
 }
 
-public class PlaywrightHtmlConverter(ILogger<PlaywrightHtmlConverter> logger) : IHtmlConverter, IDisposable
-{
-    private IPlaywright? _playwright;
-    private IBrowser? _browser;
-
-    private async Task<IBrowser> InitializeAsync(CancellationToken cancellationToken)
-    {
-        if (_browser == null)
-        {
-            _ = Microsoft.Playwright.Program.Main(["install"]);
-            _playwright = await Playwright.CreateAsync().ConfigureAwait(false);
-            _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = "msedge", Headless = true }).ConfigureAwait(false);
-        }
-
-        return _browser;
-    }
-
-    public async Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
-    {
-        var browser = await InitializeAsync(cancellationToken).ConfigureAwait(false);
-
-        var page = await browser.NewPageAsync().ConfigureAwait(false);
-
-        // title can't be self closing tag in order for parsing to work, but epub allos it
-        // TODO: it would be nice to have nicer workaround, but this may require using diffirent way of converting.
-        var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
-        if (selfClosingRegex.IsMatch(htmlContent))
-        {
-            logger.LogWarning("Epub contains self closing title tag that breaks parsing, replacing it.");
-            htmlContent = selfClosingRegex.Replace(htmlContent, "<title></title>");
-        }
-
-        await page.SetContentAsync(htmlContent).ConfigureAwait(false);
-
-        _ = await page.EvaluateAsync(@"() => {
-                const images = document.querySelectorAll('img');
-                images.forEach(img => {
-                    const altText = 'book image:' + img.getAttribute('alt') + ' file name ' + img.getAttribute('src')?.split('/').pop();
-                    const textNode = document.createTextNode(altText);
-                    img.parentNode.replaceChild(textNode, img);
-                });
-            }");
-
-        var pageText = await page.EvaluateAsync(@"() => document.body.innerText");
-
-        var title = await page.InnerTextAsync("title").ConfigureAwait(false);
-        var content = await page.InnerTextAsync("body").ConfigureAwait(false);
-        return (title, content);
-    }
-
-    public void Dispose() => _playwright?.Dispose();
-}
-
 public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> logger) : IHtmlConverter
 {
     public Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
@@ -306,12 +252,12 @@ public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> 
         var images = htmlDocument.DocumentNode.SelectNodes("//img");
         if (images != null)
         {
-            var replaceNodes = htmlDocument.DocumentNode.SelectNodes("//img").Select(img =>
+            var replaceNodes = htmlDocument.DocumentNode.SelectNodes("//img")?.Select(img =>
             {
                 var altText = img.Attributes["alt"]?.Value ?? string.Empty;
                 var fileName = img.Attributes["src"].Value.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Last();
                 return (Original: img, Replacement: HtmlTextNode.CreateNode($"book image: {altText} file name {fileName}"));
-            });
+            }) ?? [];
 
             foreach (var (original, replacement) in replaceNodes)
             {

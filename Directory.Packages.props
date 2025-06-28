@@ -5,14 +5,14 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="HtmlAgilityPack" Version="1.11.72" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
-    <PackageVersion Include="System.Text.Json" Version="9.0.0" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.47.0" />
-    <PackageVersion Include="System.Speech" Version="8.0.0" />
-    <PackageVersion Include="VersOne.Epub" Version="3.3.2" />
-    <PackageVersion Include="FFMpegCore" Version="5.1.0" />
+    <PackageVersion Include="HtmlAgilityPack" Version="1.12.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0-preview.5.25277.114" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0-preview.5.25277.114" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0-preview.5.25277.114" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.EventSource" Version="10.0.0-preview.5.25277.114" />
+    <PackageVersion Include="System.Speech" Version="10.0.0-preview.5.25277.114" />
+    <PackageVersion Include="VersOne.Epub" Version="3.3.4" />
+    <PackageVersion Include="FFMpegCore" Version="5.2.0" />
     <PackageVersion Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>
 </Project>
