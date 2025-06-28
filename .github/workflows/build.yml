@@ -31,7 +31,7 @@ jobs:
       run: dotnet publish --runtime ${{ matrix.runtime }}
 
     - name: Publish Self Contained
-      run: dotnet publish --runtime ${{ matrix.runtime }} --no-build --no-restore --self-contained
+      run: dotnet publish --runtime ${{ matrix.runtime }} --self-contained
 
     - name: Upload build artifacts
       if: github.event_name != 'pull_request'
