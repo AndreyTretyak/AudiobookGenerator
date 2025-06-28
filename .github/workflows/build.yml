@@ -31,9 +31,6 @@ jobs:
     - name: Publish
       run: dotnet publish --runtime ${{ matrix.runtime }}
 
-    - name: Publish Self Contained
-      run: dotnet publish --runtime ${{ matrix.runtime }} --self-contained ${{ matrix.selfcontained }}
-
     - name: Upload build artifacts
       if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@v4

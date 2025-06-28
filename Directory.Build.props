@@ -13,6 +13,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPublishable>false</IsPublishable>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
   <PropertyGroup>
     <MajorVersion>0</MajorVersion>
