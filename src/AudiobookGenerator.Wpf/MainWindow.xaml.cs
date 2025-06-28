@@ -1,5 +1,5 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
-
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Windows;
@@ -11,30 +11,29 @@ namespace YewCone.AudiobookGenerator.Wpf;
 
 public partial class MainWindow : Window
 {
-    private AudiobookGeneratorViewModel? viewModel;
+    private readonly AudiobookGeneratorViewModel viewModel;
 
     public MainWindow()
     {
-        IHtmlConverter converter = true
-            ? new HtmlAgilityPackHtmlConverter(new NullLogger<HtmlAgilityPackHtmlConverter>())
-            : new PlaywrightHtmlConverter(new NullLogger<PlaywrightHtmlConverter>());
+        DataContext = viewModel = new ServiceCollection()
+            .AddLogging(static p => p.AddEventSourceLogger())
+            .AddBookConverter()
+            .AddTransient<AudiobookGeneratorViewModel>()
+            .BuildServiceProvider(new ServiceProviderOptions() { ValidateOnBuild = true, ValidateScopes = true })
+            .GetRequiredService<AudiobookGeneratorViewModel>();
 
-        var parser = new VersOneEpubBookParser(converter, new NullLogger<VersOneEpubBookParser>());
-        var synthesizer = new LocalAudioSynthesizer(new NullLogger<LocalAudioSynthesizer>());
-
-        DataContext = viewModel = new AudiobookGeneratorViewModel(parser, synthesizer);
         InitializeComponent();
     }
 
     private void HandleDragOver(object sender, DragEventArgs e)
     {
-        e.Effects = viewModel != null && IsDragSupported(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = IsDragSupported(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
     private async void HandleDrop(object sender, DragEventArgs e)
     {
-        if (viewModel != null && IsDragSupported(e, out var file))
+        if (IsDragSupported(e, out var file))
         {
             await viewModel.OpenBookAsync(file);
         }
