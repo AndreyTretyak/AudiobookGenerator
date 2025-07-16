@@ -10,6 +10,7 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0-preview.5.25277.114" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0-preview.5.25277.114" />
     <PackageVersion Include="Microsoft.Extensions.Logging.EventSource" Version="10.0.0-preview.5.25277.114" />
+		<PackageVersion Include="Spectre.Console.Cli" Version="0.50" />
     <PackageVersion Include="System.Speech" Version="10.0.0-preview.5.25277.114" />
     <PackageVersion Include="VersOne.Epub" Version="3.3.4" />
     <PackageVersion Include="FFMpegCore" Version="5.2.0" />

@@ -1,9 +1,8 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+﻿using Microsoft.Extensions.Logging;
 
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Speech.Synthesis;
@@ -49,8 +48,8 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private const string supportedAudiobookFormatFilter = $"M4B audio book format ({audiobookSupportedExtension})|*{audiobookSupportedExtension}";
     private const string supportedImageFormatsFilter = "PNG|*.png|JPeg Image|*.jpg|GIF Image|*.gif|Scalable Vector Graphics|*.svg";
     private const int coverComparePrecision = 10000;
-    private readonly IAudioSynthesizer audioSynthesizer;
-    private readonly IEpubBookParser bookParser;
+    private readonly ILogger logger;
+    private readonly BookConverter converter;
 
     private bool isGenerating;
     private bool isPlaying;
@@ -86,8 +85,6 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public ObservableCollection<VoiceInfo> Voices { get; }
 
-    public ObservableCollection<LogMessage> Logs { get; } = new();
-
     public string TextContentSectionHeader => Resources.TextContentSectionHeader + (Book == null ? "" : string.Format(Resources.ChaptersLable, Book.Chapters.Count));
 
     public string ImagesSectionHeader => Resources.ImagesSectionHeader + (Book == null ? "" : string.Format(Resources.ImagesLable, Book.Images.Count));
@@ -110,10 +107,12 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public DelegateCommand ShowHowToAddVoiceCommand { get; }
 
-    public AudiobookGeneratorViewModel(IEpubBookParser parser, IAudioSynthesizer synthesizer)
+    public AudiobookGeneratorViewModel(
+        BookConverter bookConverter,
+        ILogger<AudiobookGeneratorViewModel> loggerInstance)
     {
-        bookParser = parser;
-        audioSynthesizer = synthesizer;
+        logger = loggerInstance;
+        converter = bookConverter;
 
         ShowHowToAddVoiceCommand = new DelegateCommand(ShowHowToAddVoiceAsync);
         SelectBookCommand = new DelegateCommand(SelectBookAsync);
@@ -125,7 +124,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         GenerateCommand = new DelegateCommand(GenerateAsync, parameter => this.IsVoiceSelected && this.IsBookSelected);
 
-        Voices = [.. audioSynthesizer.GetVoices()];
+        Voices = [.. converter.Synthesizer.GetVoices()];
     }
 
     private Task ShowHowToAddVoiceAsync(object? parameter)
@@ -158,7 +157,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         Mouse.OverrideCursor = Cursors.Wait;
         try
         {
-            var book = await bookParser.ParseAsync(bookFile, CancellationToken.None);
+            var book = await converter.Parser.ParseAsync(bookFile, CancellationToken.None);
 
             Book = new BookViewModel(
                 bookFile,
@@ -196,11 +195,11 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
         if (IsPlaying)
         {
-            audioSynthesizer.Speak(Book.SelectedChapter.Content, SelectedVoice);
+            converter.Synthesizer.Speak(Book.SelectedChapter.Content, SelectedVoice);
         }
         else
         {
-            audioSynthesizer.StopSpeaking();
+            converter.Synthesizer.StopSpeaking();
         }
 
         return Task.CompletedTask;
@@ -263,8 +262,6 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         {
             return;
         }
-
-        var converter = new BookConverter(bookParser, audioSynthesizer, new FfmpegAudioConverter(), new NullLogger<BookConverter>());
 
         var updatedBook = Book.CreateUpdatedModel();
         latestBookState = updatedBook;
@@ -343,12 +340,10 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         ProgressMessage = $"{stageMessage}{scopeMessage}{stateMessage}";
     }
 
-    private static void ShowError(string title, Exception exception) => ShowError(title, exception.ToString());
-
-    private static void ShowError(string title, string message)
+    private void ShowError(string title, Exception exception)
     {
-        // TODO log error
-        _ = MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.None);
+        logger.LogError(exception, title);
+        _ = MessageBox.Show(exception.ToString(), title, MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.None);
     }
 
     public static bool IsEbookExtensionSupported(string filePath) => string.Equals(ebookSupportedExtension, Path.GetExtension(filePath), StringComparison.OrdinalIgnoreCase);
@@ -420,8 +415,6 @@ internal record PropertyViewModel(BookPropertyType Type, string Value)
         _ => Type.ToString()
     };
 }
-
-internal record LogMessage(string Text, Color Color);
 
 internal class DelegateCommand(Func<object?, Task> execute, Func<object?, bool>? canExecute = null) : ICommand
 {
