@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-using System.ComponentModel;
 using System.Speech.Synthesis;
 
 using YewCone.AudiobookGenerator.Core;
@@ -44,7 +43,18 @@ public class ConvertCommand : AsyncCommand<ConvertCommand.Settings>
 
         var converter = host.Services.GetRequiredService<BookConverter>();
 
-        var book = await converter.Parser.ParseAsync(new FileInfo(stringPath), cancellationToken);
+        var book = await converter.Parser.ParseAsync(new FileInfo(stringPath.Trim('\"')), cancellationToken);
+
+        var root = new Tree(book.Title);
+        root.AddNode("Authors")
+            .AddNodes(book.AuthorList);
+        _ = root.AddNode("Description")
+            .AddNode(book.Description);
+        root.AddNode("Images")
+            .AddNodes(book.Images.Select(i => book.CoverImage == i.Content ? $"{i.FileName} (Cover)" : i.FileName));
+        root.AddNode("Chapters")
+            .AddNodes(book.Chapters.Select(i => i.Name)); // ? add content as collapsed?
+        AnsiConsole.Write(root);
 
         var voises = converter.Synthesizer.GetVoices();
 
@@ -86,14 +96,14 @@ public class ConvertCommand : AsyncCommand<ConvertCommand.Settings>
 
     public class Settings : CommandSettings
     {
-        [CommandArgument(0, "<INPUT>")]
-        public string? InputFile { get; init; }
+        //[CommandArgument(0, "<INPUT>")]
+        //public string? InputFile { get; init; }
 
-        [CommandArgument(1, "<OUTPUT>")]
-        public string? OutputDirectory { get; init; }
+        //[CommandArgument(1, "<OUTPUT>")]
+        //public string? OutputDirectory { get; init; }
 
-        [CommandOption("-l|--language")]
-        [DefaultValue("en-US")]
-        public string Language { get; init; } = "en-US";
+        //[CommandOption("-l|--language")]
+        //[DefaultValue("en-US")]
+        //public string Language { get; init; } = "en-US";
     }
 }
