@@ -3,8 +3,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using Spectre.Console;
-using Spectre.Console.Cli;
 
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Speech.Synthesis;
 
 using YewCone.AudiobookGenerator.Core;
@@ -14,18 +15,6 @@ namespace YewCone.AudiobookGenerator.Console;
 internal class Program
 {
     static async Task<int> Main(string[] args)
-    {
-        var app = new CommandApp<ConvertCommand>();
-        app.Configure(config => config.PropagateExceptions());
-        return await app.RunAsync(args);
-    }
-}
-
-public class ConvertCommand : AsyncCommand<ConvertCommand.Settings>
-{
-    private static readonly IProgress<ProgressUpdate> reporter = new ConsoleProgressReporter();
-
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
         var cancellationToken = CancellationToken.None;
 
@@ -37,6 +26,8 @@ public class ConvertCommand : AsyncCommand<ConvertCommand.Settings>
 
         using var host = builder.Build();
 
+        StartSection("Book selection");
+
         var stringPath = await AnsiConsole.PromptAsync(
             new TextPrompt<string>("Please enter path to the epub file:\n") { Validator = PathValidator },
             cancellationToken);
@@ -45,65 +36,98 @@ public class ConvertCommand : AsyncCommand<ConvertCommand.Settings>
 
         var book = await converter.Parser.ParseAsync(new FileInfo(stringPath.Trim('\"')), cancellationToken);
 
-        var root = new Tree(book.Title);
-        root.AddNode("Authors")
-            .AddNodes(book.AuthorList);
-        _ = root.AddNode("Description")
-            .AddNode(book.Description);
-        root.AddNode("Images")
-            .AddNodes(book.Images.Select(i => book.CoverImage == i.Content ? $"{i.FileName} (Cover)" : i.FileName));
-        root.AddNode("Chapters")
-            .AddNodes(book.Chapters.Select(i => i.Name)); // ? add content as collapsed?
-        AnsiConsole.Write(root);
+        StartSection(book.Title);
+
+        var chapters = new Panel(string.Join("\n", book.Chapters.Select(i => i.Name))).Header("Chapters").Expand();
+        var authors = new Panel(string.Join("\n", book.AuthorList)).Header("Authors").Expand();
+        var images = new Panel(string.Join("\n", book.Images.Select(i => book.CoverImage == i.Content ? $"{i.FileName} (Cover)" : i.FileName))).Header("Images").Expand();
+        var description = new Panel(book.Description).Header("Description").Expand();
+
+        var layout = new Layout("BookStructure")
+            .SplitColumns(
+                new Layout("Chapters", chapters),
+                new Layout("OtherData")
+                    .SplitRows(
+                        new Layout("Authors", authors),
+                        new Layout("Description", description),
+                        new Layout("Images", images)));
+
+        AnsiConsole.Write(layout);
+
+        StartSection("Voice Selection");
 
         var voises = converter.Synthesizer.GetVoices();
 
         var voice = await AnsiConsole.PromptAsync(
             new SelectionPrompt<VoiceInfo>()
-                .Title("Please select voise? (To get more voices check <add link>)")
+                .Title("Please select voice? (To get more voices check <add link>)")
                 .AddChoices(voises)
                 .UseConverter(voice => $"{voice.Name} ({voice.Culture}, {voice.Gender})"),
             cancellationToken);
+
+        StartSection("Output Selection");
 
         var outputPath = await AnsiConsole.PromptAsync(
             new TextPrompt<string>("Please select output directory:\n") { Validator = PathValidator },
             cancellationToken);
 
-        await converter.ConvertAsync(
-            voice,
-            book,
-            new FileInfo(Path.Combine(outputPath, "A.m4b")),
-            new DirectoryInfo(outputPath),
-            reporter,
-            cancellationToken);
+        StartSection("Generating");
+
+        await AnsiConsole.Progress()
+            .StartAsync(ctx =>
+                converter.ConvertAsync(
+                    voice,
+                    book,
+                    new FileInfo(Path.Combine(outputPath, $"{book.FileName}.m4b")),
+                    new DirectoryInfo(outputPath),
+                    new ConsoleProgressReporter(ctx),
+                    cancellationToken));
 
         return 0;
     }
 
+    private static void StartSection(string name)
+    {
+        AnsiConsole.Write(new Rule($"[bold][blue]{name}[/][/]"));
+        AnsiConsole.WriteLine();
+    }
 
     private static ValidationResult PathValidator(string value) =>
         Path.Exists(value?.Trim('\"'))
             ? ValidationResult.Success()
             : ValidationResult.Error("The specified path does not exist.");
 
-    public class ConsoleProgressReporter : IProgress<ProgressUpdate>
+    private class ConsoleProgressReporter(ProgressContext context) : IProgress<ProgressUpdate>
     {
+        ConcurrentDictionary<ProgressUpdate, ProgressTask> tasks = new(comparer: ProgressUpdateComparer.Instances);
+
         public void Report(ProgressUpdate value)
         {
-            throw new NotImplementedException();
+            var task = tasks.GetOrAdd(value, _ => context.AddTask($"{value.State} - {value.Scope}"));
+
+            if (value.State == Core.Progress.Started)
+            {
+                task.StartTask();
+            }
+            else
+            {
+                task.StopTask();
+            }
         }
     }
 
-    public class Settings : CommandSettings
+    private class ProgressUpdateComparer : IEqualityComparer<ProgressUpdate>
     {
-        //[CommandArgument(0, "<INPUT>")]
-        //public string? InputFile { get; init; }
+        public static ProgressUpdateComparer Instances { get; } = new ProgressUpdateComparer();
 
-        //[CommandArgument(1, "<OUTPUT>")]
-        //public string? OutputDirectory { get; init; }
+        private ProgressUpdateComparer() { }
 
-        //[CommandOption("-l|--language")]
-        //[DefaultValue("en-US")]
-        //public string Language { get; init; } = "en-US";
+        public bool Equals(ProgressUpdate? x, ProgressUpdate? y) =>
+            x != null
+            && y != null
+            && x.State == y.State
+            && x.Scope == y.Scope;
+
+        public int GetHashCode([DisallowNull] ProgressUpdate obj) => (obj.State.GetHashCode() * 7) + obj.Scope.GetHashCode();
     }
 }
