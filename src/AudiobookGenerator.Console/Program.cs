@@ -21,7 +21,7 @@ internal class Program
         var builder = Host.CreateApplicationBuilder();
 
         _ = builder.Services
-            .AddLogging(l => l.AddConsole())
+            .AddLogging(l => l.ClearProviders())
             .AddBookConverter();
 
         using var host = builder.Build();
@@ -34,14 +34,16 @@ internal class Program
 
         var converter = host.Services.GetRequiredService<BookConverter>();
 
-        var book = await converter.Parser.ParseAsync(new FileInfo(stringPath.Trim('\"')), cancellationToken);
+        var bookFile = new FileInfo(stringPath.Trim('\"'));
 
-        StartSection(book.Title);
+        var book = await converter.Parser.ParseAsync(bookFile, cancellationToken);
 
-        var chapters = new Panel(string.Join("\n", book.Chapters.Select(i => i.Name))).Header("Chapters").Expand();
-        var authors = new Panel(string.Join("\n", book.AuthorList)).Header("Authors").Expand();
-        var images = new Panel(string.Join("\n", book.Images.Select(i => book.CoverImage == i.Content ? $"{i.FileName} (Cover)" : i.FileName))).Header("Images").Expand();
-        var description = new Panel(book.Description).Header("Description").Expand();
+        StartSection(book.Title, "blue");
+
+        var chapters = new Panel(string.Join("\n", book.Chapters.Select(i => i.Name))).Header("[yellow]Chapters[/]").Expand();
+        var authors = new Panel(string.Join("\n", book.AuthorList)).Header("[yellow]Authors[/]").Expand();
+        var images = new Panel(string.Join("\n", book.Images.Select(i => book.CoverImage != null && i.Content.Take(200).SequenceEqual(book.CoverImage.Take(200)) ? $"{i.FileName} [yellow](Cover)[/]" : i.FileName))).Header("[yellow]Images[/]").Expand();
+        var description = new Panel(book.Description).Header("[yellow]Description[/]").Expand();
 
         var layout = new Layout("BookStructure")
             .SplitColumns(
@@ -68,14 +70,21 @@ internal class Program
         StartSection("Output Selection");
 
         var outputPath = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("Please select output directory:\n") { Validator = PathValidator },
+            new TextPrompt<string>("Please select output directory:\n") { Validator = PathValidator }
+                .DefaultValue(bookFile.Directory?.FullName ?? string.Empty),
             cancellationToken);
 
         StartSection("Generating");
 
         await AnsiConsole.Progress()
-            .StartAsync(ctx =>
-                converter.ConvertAsync(
+            .AutoClear(false)
+            .AutoRefresh(false)
+            .HideCompleted(false)
+            .Columns([
+                new TaskDescriptionColumn(),
+                new SpinnerColumn()])
+            .StartAsync(async ctx =>
+                await converter.ConvertAsync(
                     voice,
                     book,
                     new FileInfo(Path.Combine(outputPath, $"{book.FileName}.m4b")),
@@ -83,12 +92,15 @@ internal class Program
                     new ConsoleProgressReporter(ctx),
                     cancellationToken));
 
+        StartSection("Done");
+
         return 0;
     }
 
-    private static void StartSection(string name)
+    private static void StartSection(string name, string color = "green")
     {
-        AnsiConsole.Write(new Rule($"[bold][blue]{name}[/][/]"));
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(new Rule($"[bold][{color}]{name}[/][/]"));
         AnsiConsole.WriteLine();
     }
 
@@ -125,9 +137,9 @@ internal class Program
         public bool Equals(ProgressUpdate? x, ProgressUpdate? y) =>
             x != null
             && y != null
-            && x.State == y.State
+            && x.CurrentStage == y.CurrentStage
             && x.Scope == y.Scope;
 
-        public int GetHashCode([DisallowNull] ProgressUpdate obj) => (obj.State.GetHashCode() * 7) + obj.Scope.GetHashCode();
+        public int GetHashCode([DisallowNull] ProgressUpdate obj) => (obj.CurrentStage.GetHashCode() * 7) + obj.Scope.GetHashCode();
     }
 }
