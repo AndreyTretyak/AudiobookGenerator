@@ -1,6 +1,6 @@
-using System.Speech.Synthesis;
-
 using Spectre.Console;
+
+using System.Speech.Synthesis;
 
 using YewCone.AudiobookGenerator.Console.Models;
 using YewCone.AudiobookGenerator.Core;
@@ -45,7 +45,7 @@ internal sealed class VoiceSelector
             var isSelected = session.SelectedVoice?.Name == voice.Name;
             var marker = isSelected ? "[green]★[/]" : (i + 1).ToString();
 
-            table.AddRow(
+            _ = table.AddRow(
                 marker,
                 isSelected ? $"[green]{Markup.Escape(voice.Name)}[/]" : Markup.Escape(voice.Name),
                 voice.Culture.DisplayName,

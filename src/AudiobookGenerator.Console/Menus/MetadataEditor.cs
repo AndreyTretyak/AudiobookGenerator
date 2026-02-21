@@ -61,13 +61,13 @@ internal sealed class MetadataEditor
             .AddColumn("Field")
             .AddColumn("Value");
 
-        table.AddRow("[blue]Title[/]", Markup.Escape(session.Title));
-        table.AddRow("[blue]Authors[/]", Markup.Escape(string.Join(", ", session.Authors)));
+        _ = table.AddRow("[blue]Title[/]", Markup.Escape(session.Title));
+        _ = table.AddRow("[blue]Authors[/]", Markup.Escape(string.Join(", ", session.Authors)));
 
         var descPreview = session.Description.Length > 200
             ? session.Description[..200] + "..."
             : session.Description;
-        table.AddRow("[blue]Description[/]", Markup.Escape(descPreview));
+        _ = table.AddRow("[blue]Description[/]", Markup.Escape(descPreview));
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
@@ -189,7 +189,7 @@ internal sealed class MetadataEditor
 
                 if (authorToRemove != "← Cancel")
                 {
-                    session.Authors.Remove(authorToRemove);
+                    _ = session.Authors.Remove(authorToRemove);
                     AnsiConsole.MarkupLine($"[green]✓ Author '{authorToRemove}' removed.[/]");
                 }
                 break;

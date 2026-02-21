@@ -86,7 +86,7 @@ internal sealed class ImageManager
             var isCover = session.IsCoverImage(image);
             var sizeKb = image.Content.Length / 1024.0;
 
-            table.AddRow(
+            _ = table.AddRow(
                 (i + 1).ToString(),
                 image.FileName,
                 $"{sizeKb:F1} KB",
@@ -144,12 +144,9 @@ internal sealed class ImageManager
                     }
 
                     var ext = Path.GetExtension(trimmed).ToLowerInvariant();
-                    if (ext is not (".jpg" or ".jpeg" or ".png" or ".gif" or ".webp"))
-                    {
-                        return ValidationResult.Error("Unsupported image format. Use JPG, PNG, GIF, or WebP.");
-                    }
-
-                    return ValidationResult.Success();
+                    return ext is not (".jpg" or ".jpeg" or ".png" or ".gif" or ".webp")
+                        ? ValidationResult.Error("Unsupported image format. Use JPG, PNG, GIF, or WebP.")
+                        : ValidationResult.Success();
                 }),
             cancellationToken);
 

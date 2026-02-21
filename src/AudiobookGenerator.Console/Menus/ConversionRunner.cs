@@ -1,7 +1,6 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-
 using Spectre.Console;
+
+using System.Collections.Concurrent;
 
 using YewCone.AudiobookGenerator.Console.Models;
 using YewCone.AudiobookGenerator.Core;
@@ -64,12 +63,12 @@ internal sealed class ConversionRunner
             .AddColumn("Setting")
             .AddColumn("Value");
 
-        table.AddRow("[blue]Title[/]", Markup.Escape(session.Title));
-        table.AddRow("[blue]Authors[/]", Markup.Escape(string.Join(", ", session.Authors)));
-        table.AddRow("[blue]Chapters[/]", session.Chapters.Count.ToString());
-        table.AddRow("[blue]Voice[/]", session.SelectedVoice.Name);
-        table.AddRow("[blue]Output[/]", Markup.Escape(outputFile.FullName));
-        table.AddRow("[blue]Has Cover[/]", session.CoverImage != null ? "[green]Yes[/]" : "[yellow]No[/]");
+        _ = table.AddRow("[blue]Title[/]", Markup.Escape(session.Title));
+        _ = table.AddRow("[blue]Authors[/]", Markup.Escape(string.Join(", ", session.Authors)));
+        _ = table.AddRow("[blue]Chapters[/]", session.Chapters.Count.ToString());
+        _ = table.AddRow("[blue]Voice[/]", session.SelectedVoice.Name);
+        _ = table.AddRow("[blue]Output[/]", Markup.Escape(outputFile.FullName));
+        _ = table.AddRow("[blue]Has Cover[/]", session.CoverImage != null ? "[green]Yes[/]" : "[yellow]No[/]");
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();

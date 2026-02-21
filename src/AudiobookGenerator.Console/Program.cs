@@ -4,8 +4,6 @@ using Microsoft.Extensions.Logging;
 
 using Spectre.Console;
 
-using System.Speech.Synthesis;
-
 using YewCone.AudiobookGenerator.Console.Menus;
 using YewCone.AudiobookGenerator.Console.Models;
 using YewCone.AudiobookGenerator.Core;
@@ -45,7 +43,7 @@ internal class Program
     {
         if (args.Length == 0)
         {
-            ShowHelp();
+            _ = ShowHelp();
             return 0;
         }
 
@@ -80,27 +78,27 @@ internal class Program
             .AddColumn("[yellow]Description[/]")
             .AddColumn("[yellow]Example[/]");
 
-        table.AddRow(
+        _ = table.AddRow(
             "[blue]open[/] [dim]<file>[/]",
             "Open EPUB in interactive editor",
             "[dim]audiobook open book.epub[/]");
 
-        table.AddRow(
+        _ = table.AddRow(
             "[blue]convert[/] [dim]<file> [[options]][/]",
             "Convert EPUB directly to M4B",
             "[dim]audiobook convert book.epub --voice \"David\" --output \"C:\\Books\"[/]");
 
-        table.AddRow(
+        _ = table.AddRow(
             "[blue]voices[/]",
             "List available TTS voices",
             "[dim]audiobook voices[/]");
 
-        table.AddRow(
+        _ = table.AddRow(
             "[blue]info[/] [dim]<file>[/]",
             "Display book information",
             "[dim]audiobook info book.epub[/]");
 
-        table.AddRow(
+        _ = table.AddRow(
             "[blue]help[/]",
             "Show this help message",
             "[dim]audiobook help[/]");
@@ -294,7 +292,7 @@ internal class Program
 
         foreach (var voice in voices)
         {
-            table.AddRow(
+            _ = table.AddRow(
                 voice.Name,
                 voice.Culture.DisplayName,
                 voice.Gender.ToString(),
@@ -376,13 +374,13 @@ internal class Program
                 .Validate(value =>
                 {
                     var trimmed = value?.Trim('\"');
-                    if (string.IsNullOrWhiteSpace(trimmed))
-                        return ValidationResult.Error("Path cannot be empty.");
-                    if (!File.Exists(trimmed))
-                        return ValidationResult.Error("File does not exist.");
-                    if (!trimmed.EndsWith(".epub", StringComparison.OrdinalIgnoreCase))
-                        return ValidationResult.Error("File must be an EPUB.");
-                    return ValidationResult.Success();
+                    return trimmed switch
+                    {
+                        _ when string.IsNullOrWhiteSpace(trimmed) => ValidationResult.Error("Path cannot be empty."),
+                        _ when !File.Exists(trimmed) => ValidationResult.Error("File does not exist."),
+                        _ when !trimmed.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) => ValidationResult.Error("File must be an EPUB."),
+                        _ => ValidationResult.Success()
+                    };
                 }),
             cancellationToken);
 
