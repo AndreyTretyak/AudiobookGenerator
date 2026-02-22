@@ -389,12 +389,16 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
     private readonly record struct Chapter(string FileName, string Title, string Content);
 }
 
-public class BookConverter(
+public sealed class BookConverter(
     IEpubBookParser bookParser,
     IAudioSynthesizer synthesizer,
     IAudioConverter audioConverter,
     ILogger<BookConverter> logger)
 {
+    public IEpubBookParser Parser { get; } = bookParser;
+
+    public IAudioSynthesizer Synthesizer { get; } = synthesizer;
+
     public async Task ConvertAsync(
         VoiceInfo voice,
         Book book,
@@ -409,7 +413,7 @@ public class BookConverter(
 
         foreach (var chapter in book.Chapters)
         {
-            Stream? stream = await synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, progress, cancellationToken);
+            Stream? stream = await Synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, progress, cancellationToken);
             var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
             await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, progress, cancellationToken); // TODO: consider passing Name, for better reporting
         }
@@ -437,8 +441,8 @@ public class BookConverter(
 
     public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
-        var book = await bookParser.ParseAsync(input, cancellationToken);
-        var voice = synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
+        var book = await Parser.ParseAsync(input, cancellationToken);
+        var voice = Synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
         var bookFile = output.GetSubFile($"{book.FileName}.m4b");
 
         await ConvertAsync(voice, book, bookFile, output, progress, cancellationToken);
