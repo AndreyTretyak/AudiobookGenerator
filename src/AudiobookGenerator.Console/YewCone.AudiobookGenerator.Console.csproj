@@ -4,6 +4,9 @@
     <TargetFramework>$(CurrentTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsPublishable>true</IsPublishable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AudiobookGenerator.Core\YewCone.AudiobookGenerator.Core.csproj" />
