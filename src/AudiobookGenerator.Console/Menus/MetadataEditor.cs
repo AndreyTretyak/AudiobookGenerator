@@ -1,6 +1,7 @@
 using Spectre.Console;
 
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 
 namespace YewCone.AudiobookGenerator.Console.Menus;
 
@@ -17,39 +18,38 @@ internal sealed class MetadataEditor
         while (true)
         {
             AnsiConsole.WriteLine();
-            AnsiConsole.Write(new Rule("[yellow]Edit Metadata[/]").LeftJustified());
+            AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderEditMetadata}[/]").LeftJustified());
             AnsiConsole.WriteLine();
 
             DisplayCurrentMetadata(session);
 
             var action = await AnsiConsole.PromptAsync(
                 new SelectionPrompt<string>()
-                    .Title("What would you like to edit?")
+                    .Title(Strings.PromptWhatToEdit)
                     .HighlightStyle(Style.Parse("blue bold"))
                     .AddChoices([
-                        "📕 Edit Title",
-                        "📝 Edit Description",
-                        "👤 Edit Authors",
-                        "← Back to Main Menu"
+                        Strings.MenuEditTitle,
+                        Strings.MenuEditDescription,
+                        Strings.MenuEditAuthors,
+                        Strings.MenuBackToMainMenu
                     ]),
                 cancellationToken);
 
-            switch (action)
+            if (action == Strings.MenuEditTitle)
             {
-                case "📕 Edit Title":
-                    await EditTitleAsync(session, cancellationToken);
-                    break;
-
-                case "📝 Edit Description":
-                    await EditDescriptionAsync(session, cancellationToken);
-                    break;
-
-                case "👤 Edit Authors":
-                    await EditAuthorsAsync(session, cancellationToken);
-                    break;
-
-                case "← Back to Main Menu":
-                    return;
+                await EditTitleAsync(session, cancellationToken);
+            }
+            else if (action == Strings.MenuEditDescription)
+            {
+                await EditDescriptionAsync(session, cancellationToken);
+            }
+            else if (action == Strings.MenuEditAuthors)
+            {
+                await EditAuthorsAsync(session, cancellationToken);
+            }
+            else if (action == Strings.MenuBackToMainMenu)
+            {
+                return;
             }
         }
     }
@@ -58,16 +58,16 @@ internal sealed class MetadataEditor
     {
         var table = new Table()
             .Border(TableBorder.Rounded)
-            .AddColumn("Field")
-            .AddColumn("Value");
+            .AddColumn(Strings.ColumnField)
+            .AddColumn(Strings.ColumnValue);
 
-        _ = table.AddRow("[blue]Title[/]", Markup.Escape(session.Title));
-        _ = table.AddRow("[blue]Authors[/]", Markup.Escape(string.Join(", ", session.Authors)));
+        _ = table.AddRow($"[blue]{Strings.LabelTitle}[/]", Markup.Escape(session.Title));
+        _ = table.AddRow($"[blue]{Strings.LabelAuthors}[/]", Markup.Escape(string.Join(", ", session.Authors)));
 
         var descPreview = session.Description.Length > 200
             ? session.Description[..200] + "..."
             : session.Description;
-        _ = table.AddRow("[blue]Description[/]", Markup.Escape(descPreview));
+        _ = table.AddRow($"[blue]{Strings.LabelDescription}[/]", Markup.Escape(descPreview));
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
@@ -76,123 +76,119 @@ internal sealed class MetadataEditor
     private static async Task EditTitleAsync(BookEditSession session, CancellationToken cancellationToken)
     {
         var newTitle = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("Enter new title:")
+            new TextPrompt<string>(Strings.PromptEnterNewTitle)
                 .DefaultValue(session.Title)
                 .Validate(title => !string.IsNullOrWhiteSpace(title)
                     ? ValidationResult.Success()
-                    : ValidationResult.Error("Title cannot be empty.")),
+                    : ValidationResult.Error(Strings.ErrorTitleEmpty)),
             cancellationToken);
 
         session.Title = newTitle.Trim();
-        AnsiConsole.MarkupLine($"[green]✓ Title updated to '{Markup.Escape(session.Title)}'.[/]");
+        AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusTitleUpdated, Markup.Escape(session.Title))}[/]");
     }
 
     private static async Task EditDescriptionAsync(BookEditSession session, CancellationToken cancellationToken)
     {
-        AnsiConsole.MarkupLine("[dim]Current description:[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.StatusCurrentDescription}[/]");
         AnsiConsole.WriteLine(session.Description);
         AnsiConsole.WriteLine();
 
         var editMode = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()
-                .Title("How would you like to edit?")
+                .Title(Strings.PromptHowToEdit)
                 .AddChoices([
-                    "📝 Enter new description (single line)",
-                    "🔄 Replace with multiline input",
-                    "← Cancel"
+                    Strings.MenuEnterDescriptionSingleLine,
+                    Strings.MenuReplaceMultiline,
+                    Strings.MenuCancel
                 ]),
             cancellationToken);
 
-        switch (editMode)
+        if (editMode == Strings.MenuEnterDescriptionSingleLine)
         {
-            case "📝 Enter new description (single line)":
-                var newDesc = await AnsiConsole.PromptAsync(
-                    new TextPrompt<string>("Enter new description:")
-                        .AllowEmpty(),
-                    cancellationToken);
+            var newDesc = await AnsiConsole.PromptAsync(
+                new TextPrompt<string>(Strings.PromptEnterNewDescription)
+                    .AllowEmpty(),
+                cancellationToken);
 
-                session.Description = newDesc;
-                AnsiConsole.MarkupLine("[green]✓ Description updated.[/]");
-                break;
-
-            case "🔄 Replace with multiline input":
-                AnsiConsole.MarkupLine("[yellow]Enter new description (end with an empty line):[/]");
-                var lines = new List<string>();
-                string? line;
-                while (!string.IsNullOrEmpty(line = System.Console.ReadLine()))
-                {
-                    lines.Add(line);
-                }
-                session.Description = string.Join(Environment.NewLine, lines);
-                AnsiConsole.MarkupLine("[green]✓ Description updated.[/]");
-                break;
+            session.Description = newDesc;
+            AnsiConsole.MarkupLine($"[green]{Strings.StatusDescriptionUpdated}[/]");
+        }
+        else if (editMode == Strings.MenuReplaceMultiline)
+        {
+            AnsiConsole.MarkupLine($"[yellow]{Strings.PromptEnterDescriptionEndEmpty}[/]");
+            var lines = new List<string>();
+            string? line;
+            while (!string.IsNullOrEmpty(line = System.Console.ReadLine()))
+            {
+                lines.Add(line);
+            }
+            session.Description = string.Join(Environment.NewLine, lines);
+            AnsiConsole.MarkupLine($"[green]{Strings.StatusDescriptionUpdated}[/]");
         }
     }
 
     private static async Task EditAuthorsAsync(BookEditSession session, CancellationToken cancellationToken)
     {
-        AnsiConsole.MarkupLine($"[dim]Current authors: {string.Join(", ", session.Authors)}[/]");
+        AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusCurrentAuthors, string.Join(", ", session.Authors))}[/]");
         AnsiConsole.WriteLine();
 
         var action = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()
-                .Title("What would you like to do?")
+                .Title(Strings.PromptWhatToDo)
                 .AddChoices([
-                    "🔄 Replace all authors",
-                    "➕ Add author",
-                    "➖ Remove author",
-                    "← Cancel"
+                    Strings.MenuReplaceAllAuthors,
+                    Strings.MenuAddAuthor,
+                    Strings.MenuRemoveAuthor,
+                    Strings.MenuCancel
                 ]),
             cancellationToken);
 
-        switch (action)
+        if (action == Strings.MenuReplaceAllAuthors)
         {
-            case "🔄 Replace all authors":
-                var authorsInput = await AnsiConsole.PromptAsync(
-                    new TextPrompt<string>("Enter authors (comma-separated):")
-                        .DefaultValue(string.Join(", ", session.Authors))
-                        .Validate(input => !string.IsNullOrWhiteSpace(input)
-                            ? ValidationResult.Success()
-                            : ValidationResult.Error("At least one author is required.")),
-                    cancellationToken);
+            var authorsInput = await AnsiConsole.PromptAsync(
+                new TextPrompt<string>(Strings.PromptEnterAuthors)
+                    .DefaultValue(string.Join(", ", session.Authors))
+                    .Validate(input => !string.IsNullOrWhiteSpace(input)
+                        ? ValidationResult.Success()
+                        : ValidationResult.Error(Strings.ErrorAtLeastOneAuthor)),
+                cancellationToken);
 
-                session.Authors = [.. authorsInput
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+            session.Authors = [.. authorsInput
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
-                AnsiConsole.MarkupLine($"[green]✓ Authors updated: {string.Join(", ", session.Authors)}[/]");
-                break;
+            AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusAuthorsUpdated, string.Join(", ", session.Authors))}[/]");
+        }
+        else if (action == Strings.MenuAddAuthor)
+        {
+            var newAuthor = await AnsiConsole.PromptAsync(
+                new TextPrompt<string>(Strings.PromptEnterAuthorName)
+                    .Validate(name => !string.IsNullOrWhiteSpace(name)
+                        ? ValidationResult.Success()
+                        : ValidationResult.Error(Strings.ErrorNameEmpty)),
+                cancellationToken);
 
-            case "➕ Add author":
-                var newAuthor = await AnsiConsole.PromptAsync(
-                    new TextPrompt<string>("Enter author name:")
-                        .Validate(name => !string.IsNullOrWhiteSpace(name)
-                            ? ValidationResult.Success()
-                            : ValidationResult.Error("Name cannot be empty.")),
-                    cancellationToken);
+            session.Authors.Add(newAuthor.Trim());
+            AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusAuthorAdded, newAuthor.Trim())}[/]");
+        }
+        else if (action == Strings.MenuRemoveAuthor)
+        {
+            if (session.Authors.Count <= 1)
+            {
+                AnsiConsole.MarkupLine($"[yellow]{Strings.ErrorCannotRemoveLastAuthor}[/]");
+                return;
+            }
 
-                session.Authors.Add(newAuthor.Trim());
-                AnsiConsole.MarkupLine($"[green]✓ Author '{newAuthor.Trim()}' added.[/]");
-                break;
+            var authorToRemove = await AnsiConsole.PromptAsync(
+                new SelectionPrompt<string>()
+                    .Title(Strings.PromptSelectAuthorToRemove)
+                    .AddChoices([.. session.Authors, Strings.MenuCancel]),
+                cancellationToken);
 
-            case "➖ Remove author":
-                if (session.Authors.Count <= 1)
-                {
-                    AnsiConsole.MarkupLine("[yellow]Cannot remove the last author.[/]");
-                    break;
-                }
-
-                var authorToRemove = await AnsiConsole.PromptAsync(
-                    new SelectionPrompt<string>()
-                        .Title("Select author to remove:")
-                        .AddChoices([.. session.Authors, "← Cancel"]),
-                    cancellationToken);
-
-                if (authorToRemove != "← Cancel")
-                {
-                    _ = session.Authors.Remove(authorToRemove);
-                    AnsiConsole.MarkupLine($"[green]✓ Author '{authorToRemove}' removed.[/]");
-                }
-                break;
+            if (authorToRemove != Strings.MenuCancel)
+            {
+                _ = session.Authors.Remove(authorToRemove);
+                AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusAuthorRemoved, authorToRemove)}[/]");
+            }
         }
     }
 }

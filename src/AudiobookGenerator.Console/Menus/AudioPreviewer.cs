@@ -3,6 +3,7 @@ using System.Speech.Synthesis;
 using Spectre.Console;
 
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console.Menus;
@@ -18,16 +19,16 @@ internal sealed class AudioPreviewer
     public async Task RunAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[yellow]Preview Audio[/]").LeftJustified());
+        AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderPreviewAudio}[/]").LeftJustified());
         AnsiConsole.WriteLine();
 
         if (session.SelectedVoice == null)
         {
-            AnsiConsole.MarkupLine("[yellow]No voice selected. Please select a voice first.[/]");
+            AnsiConsole.MarkupLine($"[yellow]{Strings.ErrorSelectVoiceFirst}[/]");
             return;
         }
 
-        AnsiConsole.MarkupLine($"[dim]Using voice: [blue]{Markup.Escape(session.SelectedVoice.Name)}[/][/]");
+        AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusUsingVoice, $"[blue]{Markup.Escape(session.SelectedVoice.Name)}[/]")}[/]");
         AnsiConsole.WriteLine();
 
         while (true)
@@ -35,33 +36,33 @@ internal sealed class AudioPreviewer
             var chapters = session.Chapters;
             var choices = chapters
                 .Select((c, i) => $"{i + 1}. {Markup.Escape(c.Name)}")
-                .Prepend("🔊 Preview custom text")
-                .Append("⏹️  Stop playback")
-                .Append("← Back to Main Menu")
+                .Prepend(Strings.MenuPreviewCustomText)
+                .Append(Strings.MenuStopPlayback)
+                .Append(Strings.MenuBackToMainMenu)
                 .ToList();
 
             var choice = await AnsiConsole.PromptAsync(
                 new SelectionPrompt<string>()
-                    .Title("Select a chapter to preview:")
+                    .Title(Strings.PromptSelectChapterToPreview)
                     .PageSize(15)
                     .HighlightStyle(Style.Parse("blue bold"))
                     .AddChoices(choices),
                 cancellationToken);
 
-            if (choice == "← Back to Main Menu")
+            if (choice == Strings.MenuBackToMainMenu)
             {
                 synthesizer.StopSpeaking();
                 return;
             }
 
-            if (choice == "⏹️  Stop playback")
+            if (choice == Strings.MenuStopPlayback)
             {
                 synthesizer.StopSpeaking();
-                AnsiConsole.MarkupLine("[dim]Playback stopped.[/]");
+                AnsiConsole.MarkupLine($"[dim]{Strings.StatusPlaybackStopped}[/]");
                 continue;
             }
 
-            if (choice == "🔊 Preview custom text")
+            if (choice == Strings.MenuPreviewCustomText)
             {
                 await PreviewCustomTextAsync(session, synthesizer, cancellationToken);
                 continue;
@@ -78,31 +79,30 @@ internal sealed class AudioPreviewer
     private static async Task PreviewChapterAsync(BookEditSession session, IAudioSynthesizer synthesizer, BookChapter chapter, CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[blue]Previewing:[/] {Markup.Escape(chapter.Name)}");
+        AnsiConsole.MarkupLine($"[blue]{string.Format(Strings.StatusPreviewing, Markup.Escape(chapter.Name))}[/]");
 
         // Show preview options
         var previewLength = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()
-                .Title("How much to preview?")
+                .Title(Strings.PromptHowMuchToPreview)
                 .AddChoices([
-                    "📝 First 500 characters",
-                    "📄 First 2000 characters",
-                    "📖 Entire chapter (may take a while)",
-                    "← Cancel"
+                    Strings.MenuFirst500Chars,
+                    Strings.MenuFirst2000Chars,
+                    Strings.MenuEntireChapter,
+                    Strings.MenuCancel
                 ]),
             cancellationToken);
 
-        if (previewLength == "← Cancel")
+        if (previewLength == Strings.MenuCancel)
         {
             return;
         }
 
-        var textToSpeak = previewLength switch
-        {
-            "📝 First 500 characters" => TruncateAtSentence(chapter.Content, 500),
-            "📄 First 2000 characters" => TruncateAtSentence(chapter.Content, 2000),
-            _ => chapter.Content
-        };
+        var textToSpeak = previewLength == Strings.MenuFirst500Chars
+            ? TruncateAtSentence(chapter.Content, 500)
+            : previewLength == Strings.MenuFirst2000Chars
+                ? TruncateAtSentence(chapter.Content, 2000)
+                : chapter.Content;
 
         PlayText(synthesizer, textToSpeak, session.SelectedVoice!);
     }
@@ -110,10 +110,10 @@ internal sealed class AudioPreviewer
     private static async Task PreviewCustomTextAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
     {
         var text = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("Enter text to preview:")
+            new TextPrompt<string>(Strings.PromptEnterTextToPreview)
                 .Validate(t => !string.IsNullOrWhiteSpace(t)
                     ? ValidationResult.Success()
-                    : ValidationResult.Error("Text cannot be empty.")),
+                    : ValidationResult.Error(Strings.ErrorTextEmpty)),
             cancellationToken);
 
         PlayText(synthesizer, text, session.SelectedVoice!);
@@ -124,7 +124,7 @@ internal sealed class AudioPreviewer
         // Stop any current playback
         synthesizer.StopSpeaking();
 
-        AnsiConsole.MarkupLine("[dim]Playing audio... (select 'Stop playback' to stop)[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.StatusPlayingAudio}[/]");
 
         // Start speaking (runs in background)
         try
@@ -133,7 +133,7 @@ internal sealed class AudioPreviewer
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]Error playing audio: {Markup.Escape(ex.Message)}[/]");
+            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorPlayingAudio, Markup.Escape(ex.Message))}[/]");
         }
     }
 

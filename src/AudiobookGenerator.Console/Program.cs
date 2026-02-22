@@ -6,6 +6,7 @@ using Spectre.Console;
 
 using YewCone.AudiobookGenerator.Console.Menus;
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console;
@@ -57,7 +58,7 @@ internal class Program
             "info" => await RunInfoAsync(args, converter, cancellationToken),
             "help" or "--help" or "-h" or "/?" => ShowHelp(),
             _ when File.Exists(args[0].Trim('\"')) => await RunInteractiveAsync(["open", args[0]], converter, cancellationToken),
-            _ => ShowHelp($"Unknown command: {command}")
+            _ => ShowHelp(string.Format(Strings.ErrorUnknownCommand, command))
         };
     }
 
@@ -65,52 +66,52 @@ internal class Program
     {
         if (error != null)
         {
-            AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(error)}[/]");
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(error)}[/]");
             AnsiConsole.WriteLine();
         }
 
-        AnsiConsole.Write(new FigletText("Audiobook Generator").Color(Color.Blue));
+        AnsiConsole.Write(new FigletText(Strings.HeaderAudiobookGenerator).Color(Color.Blue));
         AnsiConsole.WriteLine();
 
         var table = new Table()
             .Border(TableBorder.Rounded)
-            .AddColumn("[yellow]Command[/]")
-            .AddColumn("[yellow]Description[/]")
-            .AddColumn("[yellow]Example[/]");
+            .AddColumn($"[yellow]{Strings.ColumnCommand}[/]")
+            .AddColumn($"[yellow]{Strings.ColumnDescription}[/]")
+            .AddColumn($"[yellow]{Strings.ColumnExample}[/]");
 
         _ = table.AddRow(
             "[blue]open[/] [dim]<file>[/]",
-            "Open EPUB in interactive editor",
+            Strings.HelpOpenDescription,
             "[dim]audiobook open book.epub[/]");
 
         _ = table.AddRow(
             "[blue]convert[/] [dim]<file> [[options]][/]",
-            "Convert EPUB directly to M4B",
+            Strings.HelpConvertDescription,
             "[dim]audiobook convert book.epub --voice \"David\" --output \"C:\\Books\"[/]");
 
         _ = table.AddRow(
             "[blue]voices[/]",
-            "List available TTS voices",
+            Strings.HelpVoicesDescription,
             "[dim]audiobook voices[/]");
 
         _ = table.AddRow(
             "[blue]info[/] [dim]<file>[/]",
-            "Display book information",
+            Strings.HelpInfoDescription,
             "[dim]audiobook info book.epub[/]");
 
         _ = table.AddRow(
             "[blue]help[/]",
-            "Show this help message",
+            Strings.HelpHelpDescription,
             "[dim]audiobook help[/]");
 
         AnsiConsole.Write(table);
 
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[dim]Convert options:[/]");
-        AnsiConsole.MarkupLine("  [blue]--voice[/] [dim]<name>[/]    TTS voice name (partial match)");
-        AnsiConsole.MarkupLine("  [blue]--output[/] [dim]<dir>[/]    Output directory (default: book's directory)");
+        AnsiConsole.MarkupLine($"[dim]{Strings.HelpConvertOptions}[/]");
+        AnsiConsole.MarkupLine($"  [blue]--voice[/] [dim]<name>[/]    {Strings.HelpVoiceOption}");
+        AnsiConsole.MarkupLine($"  [blue]--output[/] [dim]<dir>[/]    {Strings.HelpOutputOption}");
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[dim]Tip: You can also drag and drop an EPUB file onto the executable.[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.HelpTipDragDrop}[/]");
 
         return error != null ? 1 : 0;
     }
@@ -129,17 +130,17 @@ internal class Program
 
         if (!File.Exists(bookPath))
         {
-            AnsiConsole.MarkupLine($"[red]File not found: {Markup.Escape(bookPath)}[/]");
+            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorFileNotFound, Markup.Escape(bookPath))}[/]");
             return 1;
         }
 
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[bold green]Audiobook Generator[/]"));
+        AnsiConsole.Write(new Rule($"[bold green]{Strings.HeaderAudiobookGenerator}[/]"));
         AnsiConsole.WriteLine();
 
         var book = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
-            .StartAsync("Loading book...", async _ =>
+            .StartAsync(Strings.StatusLoadingBook, async _ =>
                 await converter.Parser.ParseAsync(new FileInfo(bookPath), cancellationToken));
 
         var session = new BookEditSession(book);
@@ -171,14 +172,14 @@ internal class Program
     {
         if (args.Length < 2)
         {
-            return ShowHelp("convert command requires a file path");
+            return ShowHelp(Strings.ErrorConvertRequiresFile);
         }
 
         var bookPath = args[1].Trim('\"');
 
         if (!File.Exists(bookPath))
         {
-            AnsiConsole.MarkupLine($"[red]File not found: {Markup.Escape(bookPath)}[/]");
+            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorFileNotFound, Markup.Escape(bookPath))}[/]");
             return 1;
         }
 
@@ -200,13 +201,13 @@ internal class Program
         }
 
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[bold green]Audiobook Generator - Direct Conversion[/]"));
+        AnsiConsole.Write(new Rule($"[bold green]{Strings.HeaderDirectConversion}[/]"));
         AnsiConsole.WriteLine();
 
         // Load book
         var book = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
-            .StartAsync("Loading book...", async _ =>
+            .StartAsync(Strings.StatusLoadingBook, async _ =>
                 await converter.Parser.ParseAsync(new FileInfo(bookPath), cancellationToken));
 
         var session = new BookEditSession(book);
@@ -221,8 +222,8 @@ internal class Program
 
             if (matchedVoice == null)
             {
-                AnsiConsole.MarkupLine($"[red]Voice not found: {Markup.Escape(voiceName)}[/]");
-                AnsiConsole.MarkupLine("[dim]Available voices:[/]");
+                AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorVoiceNotFound, Markup.Escape(voiceName))}[/]");
+                AnsiConsole.MarkupLine($"[dim]{Strings.StatusAvailableVoices}[/]");
                 foreach (var v in voices)
                 {
                     AnsiConsole.MarkupLine($"  - {Markup.Escape(v.Name)}");
@@ -240,7 +241,7 @@ internal class Program
 
             if (session.SelectedVoice == null)
             {
-                AnsiConsole.MarkupLine("[red]No voice selected.[/]");
+                AnsiConsole.MarkupLine($"[red]{Strings.ErrorNoVoiceSelectedShort}[/]");
                 return 1;
             }
         }
@@ -250,15 +251,15 @@ internal class Program
 
         if (!Directory.Exists(outputDir))
         {
-            AnsiConsole.MarkupLine($"[red]Output directory not found: {Markup.Escape(outputDir)}[/]");
+            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorOutputDirNotFound, Markup.Escape(outputDir))}[/]");
             return 1;
         }
 
         var outputFile = new FileInfo(Path.Combine(outputDir, $"{book.FileName}.m4b"));
 
-        AnsiConsole.MarkupLine($"[blue]Book:[/] {Markup.Escape(book.Title)}");
-        AnsiConsole.MarkupLine($"[blue]Voice:[/] {Markup.Escape(session.SelectedVoice.Name)}");
-        AnsiConsole.MarkupLine($"[blue]Output:[/] {Markup.Escape(outputFile.FullName)}");
+        AnsiConsole.MarkupLine($"[blue]{Strings.LabelBook}:[/] {Markup.Escape(book.Title)}");
+        AnsiConsole.MarkupLine($"[blue]{Strings.LabelVoice}:[/] {Markup.Escape(session.SelectedVoice.Name)}");
+        AnsiConsole.MarkupLine($"[blue]{Strings.LabelOutput}:[/] {Markup.Escape(outputFile.FullName)}");
         AnsiConsole.WriteLine();
 
         // Run conversion
@@ -271,24 +272,24 @@ internal class Program
     private static int RunListVoices(BookConverter converter)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[bold green]Available TTS Voices[/]"));
+        AnsiConsole.Write(new Rule($"[bold green]{Strings.HeaderAvailableTTSVoices}[/]"));
         AnsiConsole.WriteLine();
 
         var voices = converter.Synthesizer.GetVoices().ToList();
 
         if (voices.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]No TTS voices found on this system.[/]");
-            AnsiConsole.MarkupLine("[dim]Install additional voices via Windows Settings > Time & Language > Speech.[/]");
+            AnsiConsole.MarkupLine($"[yellow]{Strings.ErrorNoVoicesFound}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Strings.HintInstallVoices}[/]");
             return 1;
         }
 
         var table = new Table()
             .Border(TableBorder.Rounded)
-            .AddColumn("Name")
-            .AddColumn("Culture")
-            .AddColumn("Gender")
-            .AddColumn("Age");
+            .AddColumn(Strings.ColumnName)
+            .AddColumn(Strings.ColumnCulture)
+            .AddColumn(Strings.ColumnGender)
+            .AddColumn(Strings.ColumnAge);
 
         foreach (var voice in voices)
         {
@@ -301,7 +302,7 @@ internal class Program
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[dim]Total: {voices.Count} voice(s)[/]");
+        AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusTotalVoices, voices.Count)}[/]");
 
         return 0;
     }
@@ -310,20 +311,20 @@ internal class Program
     {
         if (args.Length < 2)
         {
-            return ShowHelp("info command requires a file path");
+            return ShowHelp(Strings.ErrorInfoRequiresFile);
         }
 
         var bookPath = args[1].Trim('\"');
 
         if (!File.Exists(bookPath))
         {
-            AnsiConsole.MarkupLine($"[red]File not found: {Markup.Escape(bookPath)}[/]");
+            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorFileNotFound, Markup.Escape(bookPath))}[/]");
             return 1;
         }
 
         var book = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
-            .StartAsync("Loading book...", async _ =>
+            .StartAsync(Strings.StatusLoadingBook, async _ =>
                 await converter.Parser.ParseAsync(new FileInfo(bookPath), cancellationToken));
 
         AnsiConsole.WriteLine();
@@ -332,25 +333,25 @@ internal class Program
 
         var chapters = new Panel(
             string.Join("\n", book.Chapters.Select((c, i) => $"[dim]{i + 1}.[/] {Markup.Escape(c.Name)}")))
-            .Header("[yellow]Chapters[/]")
+            .Header($"[yellow]{Strings.LabelChapters}[/]")
             .Expand();
 
         var authors = new Panel(
             string.Join("\n", book.AuthorList.Select(a => Markup.Escape(a))))
-            .Header("[yellow]Authors[/]")
+            .Header($"[yellow]{Strings.LabelAuthors}[/]")
             .Expand();
 
         var images = new Panel(
             string.Join("\n", book.Images.Select(i =>
                 book.CoverImage != null && i.Content.Take(200).SequenceEqual(book.CoverImage.Take(200))
-                    ? $"{Markup.Escape(i.FileName)} [yellow](Cover)[/]"
+                    ? $"{Markup.Escape(i.FileName)} [yellow]{Strings.LabelCover}[/]"
                     : Markup.Escape(i.FileName))))
-            .Header("[yellow]Images[/]")
+            .Header($"[yellow]{Strings.LabelImages}[/]")
             .Expand();
 
         var description = new Panel(
             Markup.Escape(book.Description.Length > 500 ? book.Description[..500] + "..." : book.Description))
-            .Header("[yellow]Description[/]")
+            .Header($"[yellow]{Strings.LabelDescription}[/]")
             .Expand();
 
         var layout = new Layout("BookStructure")
@@ -370,15 +371,15 @@ internal class Program
     private static async Task<string?> PromptForFileAsync(CancellationToken cancellationToken)
     {
         var path = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("Enter path to EPUB file:")
+            new TextPrompt<string>(Strings.PromptEnterEpubPath)
                 .Validate(value =>
                 {
                     var trimmed = value?.Trim('\"');
                     return trimmed switch
                     {
-                        _ when string.IsNullOrWhiteSpace(trimmed) => ValidationResult.Error("Path cannot be empty."),
-                        _ when !File.Exists(trimmed) => ValidationResult.Error("File does not exist."),
-                        _ when !trimmed.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) => ValidationResult.Error("File must be an EPUB."),
+                        _ when string.IsNullOrWhiteSpace(trimmed) => ValidationResult.Error(Strings.ErrorPathEmpty),
+                        _ when !File.Exists(trimmed) => ValidationResult.Error(Strings.ErrorFileDoesNotExist),
+                        _ when !trimmed.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) => ValidationResult.Error(Strings.ErrorFileMustBeEpub),
                         _ => ValidationResult.Success()
                     };
                 }),

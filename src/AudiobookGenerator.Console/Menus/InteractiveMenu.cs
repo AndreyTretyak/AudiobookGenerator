@@ -1,6 +1,7 @@
 using Spectre.Console;
 
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console.Menus;
@@ -18,15 +19,6 @@ internal sealed class InteractiveMenu(
     AudioPreviewer audioPreviewer,
     ConversionRunner conversionRunner)
 {
-    private const string EditChapters = "📖 Edit Chapters";
-    private const string ManageImages = "🖼️  Manage Images";
-    private const string EditMetadata = "📝 Edit Metadata";
-    private const string SelectVoice = "🎤 Select Voice";
-    private const string PreviewAudio = "🔊 Preview Audio";
-    private const string GenerateAudiobook = "🎧 Generate Audiobook";
-    private const string ShowBookInfo = "ℹ️  Show Book Info";
-    private const string Exit = "🚪 Exit";
-
     /// <summary>
     /// Runs the interactive menu loop.
     /// </summary>
@@ -38,84 +30,83 @@ internal sealed class InteractiveMenu(
         {
             var voiceStatus = session.SelectedVoice != null
                 ? $"[green]{Markup.Escape(session.SelectedVoice.Name)}[/]"
-                : "[yellow]Not selected[/]";
+                : $"[yellow]{Strings.StatusVoiceNotSelected}[/]";
 
-            var editStatus = session.HasEdits ? " [dim](modified)[/]" : "";
+            var editStatus = session.HasEdits ? $" [dim]{Strings.StatusModified}[/]" : "";
 
             AnsiConsole.WriteLine();
             AnsiConsole.Write(new Rule($"[bold blue]{Markup.Escape(session.Title)}[/]{editStatus}").LeftJustified());
-            AnsiConsole.MarkupLine($"[dim]Voice: {voiceStatus}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Strings.LabelVoice}: {voiceStatus}[/]");
             AnsiConsole.WriteLine();
 
             var choice = await AnsiConsole.PromptAsync(
                 new SelectionPrompt<string>()
-                    .Title("What would you like to do?")
+                    .Title(Strings.PromptWhatToDo)
                     .HighlightStyle(Style.Parse("blue bold"))
                     .AddChoices([
-                        EditChapters,
-                        ManageImages,
-                        EditMetadata,
-                        SelectVoice,
-                        PreviewAudio,
-                        GenerateAudiobook,
-                        ShowBookInfo,
-                        Exit
+                        Strings.MenuEditChapters,
+                        Strings.MenuManageImages,
+                        Strings.MenuEditMetadata,
+                        Strings.MenuSelectVoice,
+                        Strings.MenuPreviewAudio,
+                        Strings.MenuGenerateAudiobook,
+                        Strings.MenuShowBookInfo,
+                        Strings.MenuExit
                     ]),
                 cancellationToken);
 
-            switch (choice)
+            if (choice == Strings.MenuEditChapters)
             {
-                case EditChapters:
-                    await chapterEditor.RunAsync(session, cancellationToken);
-                    break;
-
-                case ManageImages:
-                    await imageManager.RunAsync(session, cancellationToken);
-                    break;
-
-                case EditMetadata:
-                    await metadataEditor.RunAsync(session, cancellationToken);
-                    break;
-
-                case SelectVoice:
+                await chapterEditor.RunAsync(session, cancellationToken);
+            }
+            else if (choice == Strings.MenuManageImages)
+            {
+                await imageManager.RunAsync(session, cancellationToken);
+            }
+            else if (choice == Strings.MenuEditMetadata)
+            {
+                await metadataEditor.RunAsync(session, cancellationToken);
+            }
+            else if (choice == Strings.MenuSelectVoice)
+            {
+                await voiceSelector.RunAsync(session, converter.Synthesizer, cancellationToken);
+            }
+            else if (choice == Strings.MenuPreviewAudio)
+            {
+                await audioPreviewer.RunAsync(session, converter.Synthesizer, cancellationToken);
+            }
+            else if (choice == Strings.MenuGenerateAudiobook)
+            {
+                if (session.SelectedVoice == null)
+                {
+                    AnsiConsole.MarkupLine($"[red]{Strings.ErrorSelectVoiceFirst}[/]");
                     await voiceSelector.RunAsync(session, converter.Synthesizer, cancellationToken);
-                    break;
+                }
 
-                case PreviewAudio:
-                    await audioPreviewer.RunAsync(session, converter.Synthesizer, cancellationToken);
-                    break;
+                if (session.SelectedVoice != null)
+                {
+                    await conversionRunner.RunAsync(session, converter, cancellationToken);
+                }
+            }
+            else if (choice == Strings.MenuShowBookInfo)
+            {
+                DisplayBookInfo();
+            }
+            else if (choice == Strings.MenuExit)
+            {
+                if (session.HasEdits)
+                {
+                    var confirmExit = await AnsiConsole.PromptAsync(
+                        new ConfirmationPrompt(Strings.PromptConfirmExitUnsaved),
+                        cancellationToken);
 
-                case GenerateAudiobook:
-                    if (session.SelectedVoice == null)
+                    if (!confirmExit)
                     {
-                        AnsiConsole.MarkupLine("[red]Please select a voice first.[/]");
-                        await voiceSelector.RunAsync(session, converter.Synthesizer, cancellationToken);
+                        continue;
                     }
-
-                    if (session.SelectedVoice != null)
-                    {
-                        await conversionRunner.RunAsync(session, converter, cancellationToken);
-                    }
-                    break;
-
-                case ShowBookInfo:
-                    DisplayBookInfo();
-                    break;
-
-                case Exit:
-                    if (session.HasEdits)
-                    {
-                        var confirmExit = await AnsiConsole.PromptAsync(
-                            new ConfirmationPrompt("You have unsaved changes. Are you sure you want to exit?"),
-                            cancellationToken);
-
-                        if (!confirmExit)
-                        {
-                            continue;
-                        }
-                    }
-                    AnsiConsole.MarkupLine("[dim]Goodbye![/]");
-                    return;
+                }
+                AnsiConsole.MarkupLine($"[dim]{Strings.StatusGoodbye}[/]");
+                return;
             }
         }
     }
@@ -128,25 +119,25 @@ internal sealed class InteractiveMenu(
 
         var chapters = new Panel(
             string.Join("\n", session.Chapters.Select((c, i) => $"[dim]{i + 1}.[/] {Markup.Escape(c.Name)}")))
-            .Header("[yellow]Chapters[/]")
+            .Header($"[yellow]{Strings.LabelChapters}[/]")
             .Expand();
 
         var authors = new Panel(
             string.Join("\n", session.Authors))
-            .Header("[yellow]Authors[/]")
+            .Header($"[yellow]{Strings.LabelAuthors}[/]")
             .Expand();
 
         var images = new Panel(
             string.Join("\n", session.Images.Select(i =>
-                session.IsCoverImage(i) ? $"{Markup.Escape(i.FileName)} [yellow](Cover)[/]" : Markup.Escape(i.FileName))))
-            .Header("[yellow]Images[/]")
+                session.IsCoverImage(i) ? $"{Markup.Escape(i.FileName)} [yellow]{Strings.LabelCover}[/]" : Markup.Escape(i.FileName))))
+            .Header($"[yellow]{Strings.LabelImages}[/]")
             .Expand();
 
         var description = new Panel(
             Markup.Escape(session.Description.Length > 500
                 ? session.Description[..500] + "..."
                 : session.Description))
-            .Header("[yellow]Description[/]")
+            .Header($"[yellow]{Strings.LabelDescription}[/]")
             .Expand();
 
         var layout = new Layout("BookStructure")

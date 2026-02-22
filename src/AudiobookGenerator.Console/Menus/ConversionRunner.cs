@@ -3,6 +3,7 @@ using Spectre.Console;
 using System.Collections.Concurrent;
 
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console.Menus;
@@ -18,25 +19,25 @@ internal sealed class ConversionRunner
     public async Task RunAsync(BookEditSession session, BookConverter converter, CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[yellow]Generate Audiobook[/]").LeftJustified());
+        AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderGenerateAudiobook}[/]").LeftJustified());
         AnsiConsole.WriteLine();
 
         if (session.SelectedVoice == null)
         {
-            AnsiConsole.MarkupLine("[red]No voice selected. Please select a voice first.[/]");
+            AnsiConsole.MarkupLine($"[red]{Strings.ErrorNoVoiceSelected}[/]");
             return;
         }
 
         // Prompt for output directory
         var outputPath = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("Output directory:")
+            new TextPrompt<string>(Strings.PromptOutputDirectory)
                 .DefaultValue(Environment.GetFolderPath(Environment.SpecialFolder.Desktop))
                 .Validate(path =>
                 {
                     var trimmed = path.Trim('\"');
                     return Directory.Exists(trimmed)
                         ? ValidationResult.Success()
-                        : ValidationResult.Error("Directory does not exist.");
+                        : ValidationResult.Error(Strings.ErrorDirectoryDoesNotExist);
                 }),
             cancellationToken);
 
@@ -47,7 +48,7 @@ internal sealed class ConversionRunner
         if (outputFile.Exists)
         {
             var overwrite = await AnsiConsole.PromptAsync(
-                new ConfirmationPrompt($"File '{outputFile.Name}' already exists. Overwrite?"),
+                new ConfirmationPrompt(string.Format(Strings.PromptConfirmOverwrite, outputFile.Name)),
                 cancellationToken);
 
             if (!overwrite)
@@ -60,21 +61,21 @@ internal sealed class ConversionRunner
         AnsiConsole.WriteLine();
         var table = new Table()
             .Border(TableBorder.Rounded)
-            .AddColumn("Setting")
-            .AddColumn("Value");
+            .AddColumn(Strings.ColumnSetting)
+            .AddColumn(Strings.ColumnValue);
 
-        _ = table.AddRow("[blue]Title[/]", Markup.Escape(session.Title));
-        _ = table.AddRow("[blue]Authors[/]", Markup.Escape(string.Join(", ", session.Authors)));
-        _ = table.AddRow("[blue]Chapters[/]", session.Chapters.Count.ToString());
-        _ = table.AddRow("[blue]Voice[/]", session.SelectedVoice.Name);
-        _ = table.AddRow("[blue]Output[/]", Markup.Escape(outputFile.FullName));
-        _ = table.AddRow("[blue]Has Cover[/]", session.CoverImage != null ? "[green]Yes[/]" : "[yellow]No[/]");
+        _ = table.AddRow($"[blue]{Strings.LabelTitle}[/]", Markup.Escape(session.Title));
+        _ = table.AddRow($"[blue]{Strings.LabelAuthors}[/]", Markup.Escape(string.Join(", ", session.Authors)));
+        _ = table.AddRow($"[blue]{Strings.LabelChapters}[/]", session.Chapters.Count.ToString());
+        _ = table.AddRow($"[blue]{Strings.LabelVoice}[/]", session.SelectedVoice.Name);
+        _ = table.AddRow($"[blue]{Strings.LabelOutput}[/]", Markup.Escape(outputFile.FullName));
+        _ = table.AddRow($"[blue]{Strings.LabelHasCover}[/]", session.CoverImage != null ? $"[green]{Strings.LabelYes}[/]" : $"[yellow]{Strings.LabelNo}[/]");
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
 
         var confirm = await AnsiConsole.PromptAsync(
-            new ConfirmationPrompt("Start conversion?"),
+            new ConfirmationPrompt(Strings.PromptStartConversion),
             cancellationToken);
 
         if (!confirm)
@@ -83,7 +84,7 @@ internal sealed class ConversionRunner
         }
 
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[dim]Starting conversion... This may take a while depending on book length.[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.StatusStartingConversion}[/]");
         AnsiConsole.WriteLine();
 
         var book = session.BuildBook();
@@ -114,17 +115,17 @@ internal sealed class ConversionRunner
                 });
 
             AnsiConsole.WriteLine();
-            AnsiConsole.Write(new Rule("[green]Conversion Complete![/]"));
+            AnsiConsole.Write(new Rule($"[green]{Strings.StatusConversionComplete}[/]"));
             AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine($"[green]✓ Audiobook saved to:[/] {Markup.Escape(outputFile.FullName)}");
+            AnsiConsole.MarkupLine($"[green]{Strings.StatusAudiobookSaved}[/] {Markup.Escape(outputFile.FullName)}");
         }
         catch (OperationCanceledException)
         {
-            AnsiConsole.MarkupLine("[yellow]Conversion cancelled.[/]");
+            AnsiConsole.MarkupLine($"[yellow]{Strings.StatusConversionCancelled}[/]");
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]Conversion failed: {Markup.Escape(ex.Message)}[/]");
+            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorConversionFailed, Markup.Escape(ex.Message))}[/]");
             AnsiConsole.WriteException(ex);
         }
     }
@@ -160,19 +161,19 @@ internal sealed class ConversionRunner
             }
             else if (value.State == Core.Progress.Failed)
             {
-                task.Description = $"[red]{description} (Failed)[/]";
+                task.Description = $"[red]{description} {Strings.StageFailed}[/]";
                 task.StopTask();
             }
         }
 
         private static string GetStageDescription(StageType stage, string scope) => stage switch
         {
-            StageType.ConvertTextToWav => $"[blue]Converting text to audio:[/] {scope}",
-            StageType.ConvertWavToAac => $"[cyan]Encoding audio:[/] {scope}",
-            StageType.SavingImage => $"[yellow]Saving image:[/] {scope}",
-            StageType.MergingIntoM4b => $"[magenta]Creating audiobook file[/]",
-            StageType.UpdatingM4bMetadata => $"[green]Adding metadata and cover[/]",
-            StageType.Installing => $"[dim]Installing dependencies[/]",
+            StageType.ConvertTextToWav => $"[blue]{Strings.StageConvertTextToAudio}[/] {scope}",
+            StageType.ConvertWavToAac => $"[cyan]{Strings.StageEncodingAudio}[/] {scope}",
+            StageType.SavingImage => $"[yellow]{Strings.StageSavingImage}[/] {scope}",
+            StageType.MergingIntoM4b => $"[magenta]{Strings.StageCreatingAudiobook}[/]",
+            StageType.UpdatingM4bMetadata => $"[green]{Strings.StageAddingMetadata}[/]",
+            StageType.Installing => $"[dim]{Strings.StageInstallingDependencies}[/]",
             _ => scope
         };
     }

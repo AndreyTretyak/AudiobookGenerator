@@ -1,6 +1,7 @@
 using Spectre.Console;
 
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console.Menus;
@@ -10,8 +11,6 @@ namespace YewCone.AudiobookGenerator.Console.Menus;
 /// </summary>
 internal sealed class ChapterEditor
 {
-    private const string Back = "← Back to Main Menu";
-
     /// <summary>
     /// Runs the chapter editor menu.
     /// </summary>
@@ -20,24 +19,24 @@ internal sealed class ChapterEditor
         while (true)
         {
             AnsiConsole.WriteLine();
-            AnsiConsole.Write(new Rule("[yellow]Edit Chapters[/]").LeftJustified());
+            AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderEditChapters}[/]").LeftJustified());
             AnsiConsole.WriteLine();
 
             var chapters = session.Chapters;
             var choices = chapters
                 .Select((c, i) => $"{i + 1}. {Markup.Escape(c.Name)}")
-                .Append(Back)
+                .Append(Strings.MenuBackToMainMenu)
                 .ToList();
 
             var choice = await AnsiConsole.PromptAsync(
                 new SelectionPrompt<string>()
-                    .Title("Select a chapter to view/edit:")
+                    .Title(Strings.PromptSelectChapter)
                     .PageSize(15)
                     .HighlightStyle(Style.Parse("blue bold"))
                     .AddChoices(choices),
                 cancellationToken);
 
-            if (choice == Back)
+            if (choice == Strings.MenuBackToMainMenu)
             {
                 return;
             }
@@ -60,39 +59,38 @@ internal sealed class ChapterEditor
 
             // Display chapter content in a panel
             var contentPreview = chapter.Content.Length > 2000
-                ? chapter.Content[..2000] + "\n[dim]... (content truncated for display)[/]"
+                ? chapter.Content[..2000] + $"\n[dim]{Strings.ContentTruncated}[/]"
                 : chapter.Content;
 
             AnsiConsole.Write(new Panel(Markup.Escape(contentPreview))
-                .Header($"[blue]Content[/] [dim]({chapter.Content.Length} characters)[/]")
+                .Header($"[blue]{Strings.LabelContent}[/] [dim]({string.Format(Strings.LabelCharactersCount, chapter.Content.Length)})[/]")
                 .Expand()
                 .Border(BoxBorder.Rounded));
 
             var action = await AnsiConsole.PromptAsync(
                 new SelectionPrompt<string>()
-                    .Title("What would you like to do?")
+                    .Title(Strings.PromptWhatToDo)
                     .HighlightStyle(Style.Parse("blue bold"))
                     .AddChoices([
-                        "✏️  Edit Content",
-                        "📋 View Full Content",
-                        "← Back to Chapter List"
+                        Strings.MenuEditContent,
+                        Strings.MenuViewFullContent,
+                        Strings.MenuBackToChapterList
                     ]),
                 cancellationToken);
 
-            switch (action)
+            if (action == Strings.MenuEditContent)
             {
-                case "✏️  Edit Content":
-                    await EditContentAsync(session, chapter, cancellationToken);
-                    // Refresh chapter reference after edit
-                    chapter = session.Chapters.First(c => c.FileName == chapter.FileName);
-                    break;
-
-                case "📋 View Full Content":
-                    ViewFullContent(chapter);
-                    break;
-
-                case "← Back to Chapter List":
-                    return;
+                await EditContentAsync(session, chapter, cancellationToken);
+                // Refresh chapter reference after edit
+                chapter = session.Chapters.First(c => c.FileName == chapter.FileName);
+            }
+            else if (action == Strings.MenuViewFullContent)
+            {
+                ViewFullContent(chapter);
+            }
+            else if (action == Strings.MenuBackToChapterList)
+            {
+                return;
             }
         }
     }
@@ -100,86 +98,84 @@ internal sealed class ChapterEditor
     private static async Task EditContentAsync(BookEditSession session, BookChapter chapter, CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[dim]Editing chapter content. The current content will be shown.[/]");
-        AnsiConsole.MarkupLine("[dim]You can modify it and press Enter when done.[/]");
-        AnsiConsole.MarkupLine("[dim]Tip: For long content, consider using an external editor.[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.HintEditingChapter1}[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.HintEditingChapter2}[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.HintEditingChapter3}[/]");
         AnsiConsole.WriteLine();
 
         var editMode = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()
-                .Title("How would you like to edit?")
+                .Title(Strings.PromptHowToEdit)
                 .AddChoices([
-                    "📝 Edit in console (for small changes)",
-                    "🔄 Replace entire content",
-                    "✂️  Find and replace text",
-                    "← Cancel"
+                    Strings.MenuEditInConsole,
+                    Strings.MenuReplaceEntireContent,
+                    Strings.MenuFindAndReplace,
+                    Strings.MenuCancel
                 ]),
             cancellationToken);
 
-        switch (editMode)
+        if (editMode == Strings.MenuEditInConsole)
         {
-            case "📝 Edit in console (for small changes)":
-                var newContent = await AnsiConsole.PromptAsync(
-                    new TextPrompt<string>("Enter new content:")
-                        .DefaultValue(chapter.Content.Length > 500 ? chapter.Content[..500] + "..." : chapter.Content)
+            var newContent = await AnsiConsole.PromptAsync(
+                new TextPrompt<string>(Strings.PromptEnterNewContent)
+                    .DefaultValue(chapter.Content.Length > 500 ? chapter.Content[..500] + "..." : chapter.Content)
+                    .AllowEmpty(),
+                cancellationToken);
+
+            if (!string.IsNullOrEmpty(newContent) && newContent != chapter.Content)
+            {
+                session.UpdateChapterContent(chapter.FileName, newContent);
+                AnsiConsole.MarkupLine($"[green]{Strings.StatusChapterContentUpdated}[/]");
+            }
+        }
+        else if (editMode == Strings.MenuReplaceEntireContent)
+        {
+            AnsiConsole.MarkupLine($"[yellow]{Strings.PromptPasteNewContent}[/]");
+            var lines = new List<string>();
+            string? line;
+            while (!string.IsNullOrEmpty(line = System.Console.ReadLine()))
+            {
+                lines.Add(line);
+            }
+            if (lines.Count > 0)
+            {
+                var replacedContent = string.Join(Environment.NewLine, lines);
+                session.UpdateChapterContent(chapter.FileName, replacedContent);
+                AnsiConsole.MarkupLine($"[green]{Strings.StatusChapterContentReplaced}[/]");
+            }
+        }
+        else if (editMode == Strings.MenuFindAndReplace)
+        {
+            var findText = await AnsiConsole.PromptAsync(
+                new TextPrompt<string>(Strings.PromptTextToFind)
+                    .AllowEmpty(),
+                cancellationToken);
+
+            if (!string.IsNullOrEmpty(findText) && chapter.Content.Contains(findText, StringComparison.OrdinalIgnoreCase))
+            {
+                var occurrences = CountOccurrences(chapter.Content, findText);
+                AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusFoundOccurrences, occurrences)}[/]");
+
+                var replaceText = await AnsiConsole.PromptAsync(
+                    new TextPrompt<string>(Strings.PromptReplaceWith)
                         .AllowEmpty(),
                     cancellationToken);
 
-                if (!string.IsNullOrEmpty(newContent) && newContent != chapter.Content)
-                {
-                    session.UpdateChapterContent(chapter.FileName, newContent);
-                    AnsiConsole.MarkupLine("[green]✓ Chapter content updated.[/]");
-                }
-                break;
-
-            case "🔄 Replace entire content":
-                AnsiConsole.MarkupLine("[yellow]Paste your new content (end with an empty line):[/]");
-                var lines = new List<string>();
-                string? line;
-                while (!string.IsNullOrEmpty(line = System.Console.ReadLine()))
-                {
-                    lines.Add(line);
-                }
-                if (lines.Count > 0)
-                {
-                    var replacedContent = string.Join(Environment.NewLine, lines);
-                    session.UpdateChapterContent(chapter.FileName, replacedContent);
-                    AnsiConsole.MarkupLine("[green]✓ Chapter content replaced.[/]");
-                }
-                break;
-
-            case "✂️  Find and replace text":
-                var findText = await AnsiConsole.PromptAsync(
-                    new TextPrompt<string>("Text to find:")
-                        .AllowEmpty(),
-                    cancellationToken);
-
-                if (!string.IsNullOrEmpty(findText) && chapter.Content.Contains(findText, StringComparison.OrdinalIgnoreCase))
-                {
-                    var occurrences = CountOccurrences(chapter.Content, findText);
-                    AnsiConsole.MarkupLine($"[dim]Found {occurrences} occurrence(s).[/]");
-
-                    var replaceText = await AnsiConsole.PromptAsync(
-                        new TextPrompt<string>("Replace with:")
-                            .AllowEmpty(),
-                        cancellationToken);
-
-                    var updatedContent = chapter.Content.Replace(findText, replaceText, StringComparison.OrdinalIgnoreCase);
-                    session.UpdateChapterContent(chapter.FileName, updatedContent);
-                    AnsiConsole.MarkupLine($"[green]✓ Replaced {occurrences} occurrence(s).[/]");
-                }
-                else if (!string.IsNullOrEmpty(findText))
-                {
-                    AnsiConsole.MarkupLine("[yellow]Text not found in chapter.[/]");
-                }
-                break;
+                var updatedContent = chapter.Content.Replace(findText, replaceText, StringComparison.OrdinalIgnoreCase);
+                session.UpdateChapterContent(chapter.FileName, updatedContent);
+                AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusReplacedOccurrences, occurrences)}[/]");
+            }
+            else if (!string.IsNullOrEmpty(findText))
+            {
+                AnsiConsole.MarkupLine($"[yellow]{Strings.ErrorTextNotFound}[/]");
+            }
         }
     }
 
     private static void ViewFullContent(BookChapter chapter)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule($"[blue]{Markup.Escape(chapter.Name)} - Full Content[/]"));
+        AnsiConsole.Write(new Rule($"[blue]{string.Format(Strings.HeaderFullContent, Markup.Escape(chapter.Name))}[/]"));
         AnsiConsole.WriteLine();
 
         // Split into pages for readability
@@ -198,7 +194,7 @@ internal sealed class ChapterEditor
             if (page < totalPages - 1)
             {
                 AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine($"[dim]--- Page {page + 1}/{totalPages} (Press Enter to continue, 'q' to quit) ---[/]");
+                AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusPageProgress, page + 1, totalPages)}[/]");
                 var input = System.Console.ReadLine();
                 if (input?.Trim().Equals("q", StringComparison.OrdinalIgnoreCase) == true)
                 {
@@ -208,7 +204,7 @@ internal sealed class ChapterEditor
         }
 
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[dim]--- End of content ---[/]");
+        AnsiConsole.MarkupLine($"[dim]{Strings.StatusEndOfContent}[/]");
     }
 
     private static int CountOccurrences(string text, string pattern)

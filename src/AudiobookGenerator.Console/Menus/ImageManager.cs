@@ -1,6 +1,7 @@
 using Spectre.Console;
 
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console.Menus;
@@ -10,8 +11,6 @@ namespace YewCone.AudiobookGenerator.Console.Menus;
 /// </summary>
 internal sealed class ImageManager
 {
-    private const string Back = "← Back to Main Menu";
-
     /// <summary>
     /// Runs the image manager menu.
     /// </summary>
@@ -20,45 +19,44 @@ internal sealed class ImageManager
         while (true)
         {
             AnsiConsole.WriteLine();
-            AnsiConsole.Write(new Rule("[yellow]Manage Images[/]").LeftJustified());
+            AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderManageImages}[/]").LeftJustified());
             AnsiConsole.WriteLine();
 
             DisplayImagesTable(session);
 
             var action = await AnsiConsole.PromptAsync(
                 new SelectionPrompt<string>()
-                    .Title("What would you like to do?")
+                    .Title(Strings.PromptWhatToDo)
                     .HighlightStyle(Style.Parse("blue bold"))
                     .AddChoices([
-                        "🖼️  Set Cover Image",
-                        "➕ Add Image from File",
-                        "💾 Save Image to Disk",
-                        "❌ Clear Cover Image",
-                        Back
+                        Strings.MenuSetCoverImage,
+                        Strings.MenuAddImageFromFile,
+                        Strings.MenuSaveImageToDisk,
+                        Strings.MenuClearCoverImage,
+                        Strings.MenuBackToMainMenu
                     ]),
                 cancellationToken);
 
-            switch (action)
+            if (action == Strings.MenuSetCoverImage)
             {
-                case "🖼️  Set Cover Image":
-                    await SetCoverImageAsync(session, cancellationToken);
-                    break;
-
-                case "➕ Add Image from File":
-                    await AddImageAsync(session, cancellationToken);
-                    break;
-
-                case "💾 Save Image to Disk":
-                    await SaveImageAsync(session, cancellationToken);
-                    break;
-
-                case "❌ Clear Cover Image":
-                    session.ClearCoverImage();
-                    AnsiConsole.MarkupLine("[green]✓ Cover image cleared.[/]");
-                    break;
-
-                case Back:
-                    return;
+                await SetCoverImageAsync(session, cancellationToken);
+            }
+            else if (action == Strings.MenuAddImageFromFile)
+            {
+                await AddImageAsync(session, cancellationToken);
+            }
+            else if (action == Strings.MenuSaveImageToDisk)
+            {
+                await SaveImageAsync(session, cancellationToken);
+            }
+            else if (action == Strings.MenuClearCoverImage)
+            {
+                session.ClearCoverImage();
+                AnsiConsole.MarkupLine($"[green]{Strings.StatusCoverImageCleared}[/]");
+            }
+            else if (action == Strings.MenuBackToMainMenu)
+            {
+                return;
             }
         }
     }
@@ -69,16 +67,16 @@ internal sealed class ImageManager
 
         if (images.Count == 0)
         {
-            AnsiConsole.MarkupLine("[dim]No images in book.[/]");
+            AnsiConsole.MarkupLine($"[dim]{Strings.StatusNoImagesInBook}[/]");
             return;
         }
 
         var table = new Table()
             .Border(TableBorder.Rounded)
-            .AddColumn(new TableColumn("#").Centered())
-            .AddColumn("Filename")
-            .AddColumn(new TableColumn("Size").RightAligned())
-            .AddColumn(new TableColumn("Cover").Centered());
+            .AddColumn(new TableColumn(Strings.ColumnNumber).Centered())
+            .AddColumn(Strings.ColumnFilename)
+            .AddColumn(new TableColumn(Strings.ColumnSize).RightAligned())
+            .AddColumn(new TableColumn(Strings.ColumnCover).Centered());
 
         for (var i = 0; i < images.Count; i++)
         {
@@ -103,23 +101,23 @@ internal sealed class ImageManager
 
         if (images.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]No images available. Add an image first.[/]");
+            AnsiConsole.MarkupLine($"[yellow]{Strings.ErrorNoImagesAvailable}[/]");
             return;
         }
 
         var choices = images
             .Select((img, i) => $"{i + 1}. {img.FileName}")
-            .Append("← Cancel")
+            .Append(Strings.MenuCancel)
             .ToList();
 
         var choice = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()
-                .Title("Select image to set as cover:")
+                .Title(Strings.PromptSelectImageAsCover)
                 .HighlightStyle(Style.Parse("blue bold"))
                 .AddChoices(choices),
             cancellationToken);
 
-        if (choice == "← Cancel")
+        if (choice == Strings.MenuCancel)
         {
             return;
         }
@@ -128,24 +126,24 @@ internal sealed class ImageManager
         var selectedImage = images[index];
 
         session.SetCoverImage(selectedImage);
-        AnsiConsole.MarkupLine($"[green]✓ '{selectedImage.FileName}' set as cover image.[/]");
+        AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusImageSetAsCover, selectedImage.FileName)}[/]");
     }
 
     private static async Task AddImageAsync(BookEditSession session, CancellationToken cancellationToken)
     {
         var filePath = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("Enter path to image file:")
+            new TextPrompt<string>(Strings.PromptEnterImagePath)
                 .Validate(path =>
                 {
                     var trimmed = path.Trim('\"');
                     if (!File.Exists(trimmed))
                     {
-                        return ValidationResult.Error("File does not exist.");
+                        return ValidationResult.Error(Strings.ErrorFileDoesNotExist);
                     }
 
                     var ext = Path.GetExtension(trimmed).ToLowerInvariant();
                     return ext is not (".jpg" or ".jpeg" or ".png" or ".gif" or ".webp")
-                        ? ValidationResult.Error("Unsupported image format. Use JPG, PNG, GIF, or WebP.")
+                        ? ValidationResult.Error(Strings.ErrorUnsupportedImageFormat)
                         : ValidationResult.Success();
                 }),
             cancellationToken);
@@ -157,17 +155,17 @@ internal sealed class ImageManager
         var image = new BookImage(fileName, content);
         session.AddImage(image);
 
-        AnsiConsole.MarkupLine($"[green]✓ Image '{fileName}' added ({content.Length / 1024.0:F1} KB).[/]");
+        AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusImageAdded, fileName, $"{content.Length / 1024.0:F1}")}[/]");
 
         var setAsCover = await AnsiConsole.PromptAsync(
-            new ConfirmationPrompt("Set this image as the cover?")
+            new ConfirmationPrompt(Strings.PromptSetAsCover)
                 .ShowDefaultValue(),
             cancellationToken);
 
         if (setAsCover)
         {
             session.SetCoverImage(image);
-            AnsiConsole.MarkupLine("[green]✓ Image set as cover.[/]");
+            AnsiConsole.MarkupLine($"[green]{Strings.StatusImageSetAsCoverShort}[/]");
         }
     }
 
@@ -177,23 +175,23 @@ internal sealed class ImageManager
 
         if (images.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]No images to save.[/]");
+            AnsiConsole.MarkupLine($"[yellow]{Strings.ErrorNoImagesToSave}[/]");
             return;
         }
 
         var choices = images
             .Select((img, i) => $"{i + 1}. {img.FileName}")
-            .Append("← Cancel")
+            .Append(Strings.MenuCancel)
             .ToList();
 
         var choice = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()
-                .Title("Select image to save:")
+                .Title(Strings.PromptSelectImageToSave)
                 .HighlightStyle(Style.Parse("blue bold"))
                 .AddChoices(choices),
             cancellationToken);
 
-        if (choice == "← Cancel")
+        if (choice == Strings.MenuCancel)
         {
             return;
         }
@@ -202,20 +200,20 @@ internal sealed class ImageManager
         var selectedImage = images[index];
 
         var outputPath = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("Save to directory:")
+            new TextPrompt<string>(Strings.PromptSaveToDirectory)
                 .DefaultValue(Environment.GetFolderPath(Environment.SpecialFolder.Desktop))
                 .Validate(path =>
                 {
                     var trimmed = path.Trim('\"');
                     return Directory.Exists(trimmed)
                         ? ValidationResult.Success()
-                        : ValidationResult.Error("Directory does not exist.");
+                        : ValidationResult.Error(Strings.ErrorDirectoryDoesNotExist);
                 }),
             cancellationToken);
 
         var fullPath = Path.Combine(outputPath.Trim('\"'), selectedImage.FileName);
 
         await File.WriteAllBytesAsync(fullPath, selectedImage.Content, cancellationToken);
-        AnsiConsole.MarkupLine($"[green]✓ Image saved to '{fullPath}'.[/]");
+        AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusImageSaved, fullPath)}[/]");
     }
 }

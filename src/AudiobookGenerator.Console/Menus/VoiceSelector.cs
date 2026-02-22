@@ -3,6 +3,7 @@ using Spectre.Console;
 using System.Speech.Synthesis;
 
 using YewCone.AudiobookGenerator.Console.Models;
+using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console.Menus;
@@ -18,26 +19,26 @@ internal sealed class VoiceSelector
     public async Task RunAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule("[yellow]Select Voice[/]").LeftJustified());
+        AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderSelectVoice}[/]").LeftJustified());
         AnsiConsole.WriteLine();
 
         var voices = synthesizer.GetVoices().ToList();
 
         if (voices.Count == 0)
         {
-            AnsiConsole.MarkupLine("[red]No TTS voices found on this system.[/]");
-            AnsiConsole.MarkupLine("[dim]Install additional voices via Windows Settings > Time & Language > Speech.[/]");
+            AnsiConsole.MarkupLine($"[red]{Strings.ErrorNoVoicesFound}[/]");
+            AnsiConsole.MarkupLine($"[dim]{Strings.HintInstallVoices}[/]");
             return;
         }
 
         // Display voice info table
         var table = new Table()
             .Border(TableBorder.Rounded)
-            .AddColumn("#")
-            .AddColumn("Name")
-            .AddColumn("Culture")
-            .AddColumn("Gender")
-            .AddColumn("Age");
+            .AddColumn(Strings.ColumnNumber)
+            .AddColumn(Strings.ColumnName)
+            .AddColumn(Strings.ColumnCulture)
+            .AddColumn(Strings.ColumnGender)
+            .AddColumn(Strings.ColumnAge);
 
         for (var i = 0; i < voices.Count; i++)
         {
@@ -58,28 +59,28 @@ internal sealed class VoiceSelector
 
         if (session.SelectedVoice != null)
         {
-            AnsiConsole.MarkupLine($"[dim]Currently selected: [green]{Markup.Escape(session.SelectedVoice.Name)}[/][/]");
+            AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusCurrentlySelected, $"[green]{Markup.Escape(session.SelectedVoice.Name)}[/]")}[/]");
             AnsiConsole.WriteLine();
         }
 
         var choices = voices
             .Select(v => $"{Markup.Escape(v.Name)} ({v.Culture.Name}, {v.Gender})")
-            .Append("← Back to Main Menu")
+            .Append(Strings.MenuBackToMainMenu)
             .ToList();
 
         var selection = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()
-                .Title("Select a voice for conversion:")
+                .Title(Strings.PromptSelectVoice)
                 .PageSize(10)
                 .HighlightStyle(Style.Parse("blue bold"))
                 .AddChoices(choices),
             cancellationToken);
 
-        if (selection != "← Back to Main Menu")
+        if (selection != Strings.MenuBackToMainMenu)
         {
             var selectedVoice = voices.First(v => selection.StartsWith(Markup.Escape(v.Name)));
             session.SelectedVoice = selectedVoice;
-            AnsiConsole.MarkupLine($"[green]✓ Voice set to '{Markup.Escape(selectedVoice.Name)}'.[/]");
+            AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusVoiceSet, Markup.Escape(selectedVoice.Name))}[/]");
         }
     }
 

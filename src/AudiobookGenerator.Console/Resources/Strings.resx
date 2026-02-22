@@ -1,0 +1,611 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <!-- Column headers -->
+  <data name="ColumnAge" xml:space="preserve">
+    <value>Age</value>
+  </data>
+  <data name="ColumnCommand" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="ColumnCover" xml:space="preserve">
+    <value>Cover</value>
+  </data>
+  <data name="ColumnCulture" xml:space="preserve">
+    <value>Culture</value>
+  </data>
+  <data name="ColumnDescription" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="ColumnExample" xml:space="preserve">
+    <value>Example</value>
+  </data>
+  <data name="ColumnField" xml:space="preserve">
+    <value>Field</value>
+  </data>
+  <data name="ColumnFilename" xml:space="preserve">
+    <value>Filename</value>
+  </data>
+  <data name="ColumnGender" xml:space="preserve">
+    <value>Gender</value>
+  </data>
+  <data name="ColumnName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="ColumnNumber" xml:space="preserve">
+    <value>#</value>
+  </data>
+  <data name="ColumnSetting" xml:space="preserve">
+    <value>Setting</value>
+  </data>
+  <data name="ColumnSize" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="ColumnValue" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <!-- Content -->
+  <data name="ContentTruncated" xml:space="preserve">
+    <value>... (content truncated for display)</value>
+  </data>
+  <!-- Error messages -->
+  <data name="ErrorAtLeastOneAuthor" xml:space="preserve">
+    <value>At least one author is required.</value>
+  </data>
+  <data name="ErrorCannotRemoveLastAuthor" xml:space="preserve">
+    <value>Cannot remove the last author.</value>
+  </data>
+  <data name="ErrorConversionFailed" xml:space="preserve">
+    <value>Conversion failed: {0}</value>
+  </data>
+  <data name="ErrorConvertRequiresFile" xml:space="preserve">
+    <value>convert command requires a file path</value>
+  </data>
+  <data name="ErrorDirectoryDoesNotExist" xml:space="preserve">
+    <value>Directory does not exist.</value>
+  </data>
+  <data name="ErrorFileDoesNotExist" xml:space="preserve">
+    <value>File does not exist.</value>
+  </data>
+  <data name="ErrorFileMustBeEpub" xml:space="preserve">
+    <value>File must be an EPUB.</value>
+  </data>
+  <data name="ErrorFileNotFound" xml:space="preserve">
+    <value>File not found: {0}</value>
+  </data>
+  <data name="ErrorInfoRequiresFile" xml:space="preserve">
+    <value>info command requires a file path</value>
+  </data>
+  <data name="ErrorNameEmpty" xml:space="preserve">
+    <value>Name cannot be empty.</value>
+  </data>
+  <data name="ErrorNoImagesAvailable" xml:space="preserve">
+    <value>No images available. Add an image first.</value>
+  </data>
+  <data name="ErrorNoImagesToSave" xml:space="preserve">
+    <value>No images to save.</value>
+  </data>
+  <data name="ErrorNoVoiceSelected" xml:space="preserve">
+    <value>No voice selected. Please select a voice first.</value>
+  </data>
+  <data name="ErrorNoVoiceSelectedShort" xml:space="preserve">
+    <value>No voice selected.</value>
+  </data>
+  <data name="ErrorNoVoicesFound" xml:space="preserve">
+    <value>No TTS voices found on this system.</value>
+  </data>
+  <data name="ErrorOutputDirNotFound" xml:space="preserve">
+    <value>Output directory not found: {0}</value>
+  </data>
+  <data name="ErrorPathEmpty" xml:space="preserve">
+    <value>Path cannot be empty.</value>
+  </data>
+  <data name="ErrorPlayingAudio" xml:space="preserve">
+    <value>Error playing audio: {0}</value>
+  </data>
+  <data name="ErrorSelectVoiceFirst" xml:space="preserve">
+    <value>Please select a voice first.</value>
+  </data>
+  <data name="ErrorTextEmpty" xml:space="preserve">
+    <value>Text cannot be empty.</value>
+  </data>
+  <data name="ErrorTextNotFound" xml:space="preserve">
+    <value>Text not found in chapter.</value>
+  </data>
+  <data name="ErrorTitleEmpty" xml:space="preserve">
+    <value>Title cannot be empty.</value>
+  </data>
+  <data name="ErrorUnknownCommand" xml:space="preserve">
+    <value>Unknown command: {0}</value>
+  </data>
+  <data name="ErrorUnsupportedImageFormat" xml:space="preserve">
+    <value>Unsupported image format. Use JPG, PNG, GIF, or WebP.</value>
+  </data>
+  <data name="ErrorVoiceNotFound" xml:space="preserve">
+    <value>Voice not found: {0}</value>
+  </data>
+  <!-- Headers -->
+  <data name="HeaderAudiobookGenerator" xml:space="preserve">
+    <value>Audiobook Generator</value>
+  </data>
+  <data name="HeaderAvailableTTSVoices" xml:space="preserve">
+    <value>Available TTS Voices</value>
+  </data>
+  <data name="HeaderDirectConversion" xml:space="preserve">
+    <value>Audiobook Generator - Direct Conversion</value>
+  </data>
+  <data name="HeaderEditChapters" xml:space="preserve">
+    <value>Edit Chapters</value>
+  </data>
+  <data name="HeaderEditMetadata" xml:space="preserve">
+    <value>Edit Metadata</value>
+  </data>
+  <data name="HeaderFullContent" xml:space="preserve">
+    <value>{0} - Full Content</value>
+  </data>
+  <data name="HeaderGenerateAudiobook" xml:space="preserve">
+    <value>Generate Audiobook</value>
+  </data>
+  <data name="HeaderManageImages" xml:space="preserve">
+    <value>Manage Images</value>
+  </data>
+  <data name="HeaderPreviewAudio" xml:space="preserve">
+    <value>Preview Audio</value>
+  </data>
+  <data name="HeaderSelectVoice" xml:space="preserve">
+    <value>Select Voice</value>
+  </data>
+  <!-- Help content -->
+  <data name="HelpConvertDescription" xml:space="preserve">
+    <value>Convert EPUB directly to M4B</value>
+  </data>
+  <data name="HelpConvertOptions" xml:space="preserve">
+    <value>Convert options:</value>
+  </data>
+  <data name="HelpHelpDescription" xml:space="preserve">
+    <value>Show this help message</value>
+  </data>
+  <data name="HelpInfoDescription" xml:space="preserve">
+    <value>Display book information</value>
+  </data>
+  <data name="HelpOpenDescription" xml:space="preserve">
+    <value>Open EPUB in interactive editor</value>
+  </data>
+  <data name="HelpOutputOption" xml:space="preserve">
+    <value>--output &lt;dir&gt;    Output directory (default: book's directory)</value>
+  </data>
+  <data name="HelpTipDragDrop" xml:space="preserve">
+    <value>Tip: You can also drag and drop an EPUB file onto the executable.</value>
+  </data>
+  <data name="HelpVoiceOption" xml:space="preserve">
+    <value>--voice &lt;name&gt;    TTS voice name (partial match)</value>
+  </data>
+  <data name="HelpVoicesDescription" xml:space="preserve">
+    <value>List available TTS voices</value>
+  </data>
+  <!-- Hints -->
+  <data name="HintEditingChapter1" xml:space="preserve">
+    <value>Editing chapter content. The current content will be shown.</value>
+  </data>
+  <data name="HintEditingChapter2" xml:space="preserve">
+    <value>You can modify it and press Enter when done.</value>
+  </data>
+  <data name="HintEditingChapter3" xml:space="preserve">
+    <value>Tip: For long content, consider using an external editor.</value>
+  </data>
+  <data name="HintInstallVoices" xml:space="preserve">
+    <value>Install additional voices via Windows Settings &gt; Time &amp; Language &gt; Speech.</value>
+  </data>
+  <!-- Labels -->
+  <data name="LabelAuthors" xml:space="preserve">
+    <value>Authors</value>
+  </data>
+  <data name="LabelBook" xml:space="preserve">
+    <value>Book</value>
+  </data>
+  <data name="LabelChapters" xml:space="preserve">
+    <value>Chapters</value>
+  </data>
+  <data name="LabelCharactersCount" xml:space="preserve">
+    <value>{0} characters</value>
+  </data>
+  <data name="LabelContent" xml:space="preserve">
+    <value>Content</value>
+  </data>
+  <data name="LabelCover" xml:space="preserve">
+    <value>(Cover)</value>
+  </data>
+  <data name="LabelDescription" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="LabelHasCover" xml:space="preserve">
+    <value>Has Cover</value>
+  </data>
+  <data name="LabelImages" xml:space="preserve">
+    <value>Images</value>
+  </data>
+  <data name="LabelNo" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="LabelOutput" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="LabelTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="LabelVoice" xml:space="preserve">
+    <value>Voice</value>
+  </data>
+  <data name="LabelYes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <!-- Menu items -->
+  <data name="MenuAddAuthor" xml:space="preserve">
+    <value>➕ Add author</value>
+  </data>
+  <data name="MenuAddImageFromFile" xml:space="preserve">
+    <value>➕ Add Image from File</value>
+  </data>
+  <data name="MenuBackToChapterList" xml:space="preserve">
+    <value>← Back to Chapter List</value>
+  </data>
+  <data name="MenuBackToMainMenu" xml:space="preserve">
+    <value>← Back to Main Menu</value>
+  </data>
+  <data name="MenuCancel" xml:space="preserve">
+    <value>← Cancel</value>
+  </data>
+  <data name="MenuClearCoverImage" xml:space="preserve">
+    <value>❌ Clear Cover Image</value>
+  </data>
+  <data name="MenuEditAuthors" xml:space="preserve">
+    <value>👤 Edit Authors</value>
+  </data>
+  <data name="MenuEditChapters" xml:space="preserve">
+    <value>📖 Edit Chapters</value>
+  </data>
+  <data name="MenuEditContent" xml:space="preserve">
+    <value>✏️  Edit Content</value>
+  </data>
+  <data name="MenuEditDescription" xml:space="preserve">
+    <value>📝 Edit Description</value>
+  </data>
+  <data name="MenuEditInConsole" xml:space="preserve">
+    <value>📝 Edit in console (for small changes)</value>
+  </data>
+  <data name="MenuEditMetadata" xml:space="preserve">
+    <value>📝 Edit Metadata</value>
+  </data>
+  <data name="MenuEditTitle" xml:space="preserve">
+    <value>📕 Edit Title</value>
+  </data>
+  <data name="MenuEntireChapter" xml:space="preserve">
+    <value>📖 Entire chapter (may take a while)</value>
+  </data>
+  <data name="MenuEnterDescriptionSingleLine" xml:space="preserve">
+    <value>📝 Enter new description (single line)</value>
+  </data>
+  <data name="MenuExit" xml:space="preserve">
+    <value>🚪 Exit</value>
+  </data>
+  <data name="MenuFindAndReplace" xml:space="preserve">
+    <value>✂️  Find and replace text</value>
+  </data>
+  <data name="MenuFirst2000Chars" xml:space="preserve">
+    <value>📄 First 2000 characters</value>
+  </data>
+  <data name="MenuFirst500Chars" xml:space="preserve">
+    <value>📝 First 500 characters</value>
+  </data>
+  <data name="MenuGenerateAudiobook" xml:space="preserve">
+    <value>🎧 Generate Audiobook</value>
+  </data>
+  <data name="MenuManageImages" xml:space="preserve">
+    <value>🖼️  Manage Images</value>
+  </data>
+  <data name="MenuPreviewAudio" xml:space="preserve">
+    <value>🔊 Preview Audio</value>
+  </data>
+  <data name="MenuPreviewCustomText" xml:space="preserve">
+    <value>🔊 Preview custom text</value>
+  </data>
+  <data name="MenuRemoveAuthor" xml:space="preserve">
+    <value>➖ Remove author</value>
+  </data>
+  <data name="MenuReplaceAllAuthors" xml:space="preserve">
+    <value>🔄 Replace all authors</value>
+  </data>
+  <data name="MenuReplaceEntireContent" xml:space="preserve">
+    <value>🔄 Replace entire content</value>
+  </data>
+  <data name="MenuReplaceMultiline" xml:space="preserve">
+    <value>🔄 Replace with multiline input</value>
+  </data>
+  <data name="MenuSaveImageToDisk" xml:space="preserve">
+    <value>💾 Save Image to Disk</value>
+  </data>
+  <data name="MenuSelectVoice" xml:space="preserve">
+    <value>🎤 Select Voice</value>
+  </data>
+  <data name="MenuSetCoverImage" xml:space="preserve">
+    <value>🖼️  Set Cover Image</value>
+  </data>
+  <data name="MenuShowBookInfo" xml:space="preserve">
+    <value>ℹ️  Show Book Info</value>
+  </data>
+  <data name="MenuStopPlayback" xml:space="preserve">
+    <value>⏹️  Stop playback</value>
+  </data>
+  <data name="MenuViewFullContent" xml:space="preserve">
+    <value>📋 View Full Content</value>
+  </data>
+  <!-- Prompts -->
+  <data name="PromptConfirmExitUnsaved" xml:space="preserve">
+    <value>You have unsaved changes. Are you sure you want to exit?</value>
+  </data>
+  <data name="PromptConfirmOverwrite" xml:space="preserve">
+    <value>File '{0}' already exists. Overwrite?</value>
+  </data>
+  <data name="PromptEnterAuthors" xml:space="preserve">
+    <value>Enter authors (comma-separated):</value>
+  </data>
+  <data name="PromptEnterAuthorName" xml:space="preserve">
+    <value>Enter author name:</value>
+  </data>
+  <data name="PromptEnterDescriptionEndEmpty" xml:space="preserve">
+    <value>Enter new description (end with an empty line):</value>
+  </data>
+  <data name="PromptEnterEpubPath" xml:space="preserve">
+    <value>Enter path to EPUB file:</value>
+  </data>
+  <data name="PromptEnterImagePath" xml:space="preserve">
+    <value>Enter path to image file:</value>
+  </data>
+  <data name="PromptEnterNewContent" xml:space="preserve">
+    <value>Enter new content:</value>
+  </data>
+  <data name="PromptEnterNewDescription" xml:space="preserve">
+    <value>Enter new description:</value>
+  </data>
+  <data name="PromptEnterNewTitle" xml:space="preserve">
+    <value>Enter new title:</value>
+  </data>
+  <data name="PromptEnterTextToPreview" xml:space="preserve">
+    <value>Enter text to preview:</value>
+  </data>
+  <data name="PromptHowMuchToPreview" xml:space="preserve">
+    <value>How much to preview?</value>
+  </data>
+  <data name="PromptHowToEdit" xml:space="preserve">
+    <value>How would you like to edit?</value>
+  </data>
+  <data name="PromptOutputDirectory" xml:space="preserve">
+    <value>Output directory:</value>
+  </data>
+  <data name="PromptPasteNewContent" xml:space="preserve">
+    <value>Paste your new content (end with an empty line):</value>
+  </data>
+  <data name="PromptReplaceWith" xml:space="preserve">
+    <value>Replace with:</value>
+  </data>
+  <data name="PromptSaveToDirectory" xml:space="preserve">
+    <value>Save to directory:</value>
+  </data>
+  <data name="PromptSelectAuthorToRemove" xml:space="preserve">
+    <value>Select author to remove:</value>
+  </data>
+  <data name="PromptSelectChapter" xml:space="preserve">
+    <value>Select a chapter to view/edit:</value>
+  </data>
+  <data name="PromptSelectChapterToPreview" xml:space="preserve">
+    <value>Select a chapter to preview:</value>
+  </data>
+  <data name="PromptSelectImageAsCover" xml:space="preserve">
+    <value>Select image to set as cover:</value>
+  </data>
+  <data name="PromptSelectImageToSave" xml:space="preserve">
+    <value>Select image to save:</value>
+  </data>
+  <data name="PromptSelectVoice" xml:space="preserve">
+    <value>Select a voice for conversion:</value>
+  </data>
+  <data name="PromptSetAsCover" xml:space="preserve">
+    <value>Set this image as the cover?</value>
+  </data>
+  <data name="PromptStartConversion" xml:space="preserve">
+    <value>Start conversion?</value>
+  </data>
+  <data name="PromptTextToFind" xml:space="preserve">
+    <value>Text to find:</value>
+  </data>
+  <data name="PromptWhatToDo" xml:space="preserve">
+    <value>What would you like to do?</value>
+  </data>
+  <data name="PromptWhatToEdit" xml:space="preserve">
+    <value>What would you like to edit?</value>
+  </data>
+  <!-- Stage descriptions -->
+  <data name="StageAddingMetadata" xml:space="preserve">
+    <value>Adding metadata and cover</value>
+  </data>
+  <data name="StageConvertTextToAudio" xml:space="preserve">
+    <value>Converting text to audio:</value>
+  </data>
+  <data name="StageCreatingAudiobook" xml:space="preserve">
+    <value>Creating audiobook file</value>
+  </data>
+  <data name="StageEncodingAudio" xml:space="preserve">
+    <value>Encoding audio:</value>
+  </data>
+  <data name="StageFailed" xml:space="preserve">
+    <value>(Failed)</value>
+  </data>
+  <data name="StageInstallingDependencies" xml:space="preserve">
+    <value>Installing dependencies</value>
+  </data>
+  <data name="StageSavingImage" xml:space="preserve">
+    <value>Saving image:</value>
+  </data>
+  <!-- Status messages -->
+  <data name="StatusAudiobookSaved" xml:space="preserve">
+    <value>✓ Audiobook saved to:</value>
+  </data>
+  <data name="StatusAuthorAdded" xml:space="preserve">
+    <value>✓ Author '{0}' added.</value>
+  </data>
+  <data name="StatusAuthorRemoved" xml:space="preserve">
+    <value>✓ Author '{0}' removed.</value>
+  </data>
+  <data name="StatusAuthorsUpdated" xml:space="preserve">
+    <value>✓ Authors updated: {0}</value>
+  </data>
+  <data name="StatusAvailableVoices" xml:space="preserve">
+    <value>Available voices:</value>
+  </data>
+  <data name="StatusChapterContentReplaced" xml:space="preserve">
+    <value>✓ Chapter content replaced.</value>
+  </data>
+  <data name="StatusChapterContentUpdated" xml:space="preserve">
+    <value>✓ Chapter content updated.</value>
+  </data>
+  <data name="StatusConversionCancelled" xml:space="preserve">
+    <value>Conversion cancelled.</value>
+  </data>
+  <data name="StatusConversionComplete" xml:space="preserve">
+    <value>Conversion Complete!</value>
+  </data>
+  <data name="StatusCoverImageCleared" xml:space="preserve">
+    <value>✓ Cover image cleared.</value>
+  </data>
+  <data name="StatusCurrentAuthors" xml:space="preserve">
+    <value>Current authors: {0}</value>
+  </data>
+  <data name="StatusCurrentDescription" xml:space="preserve">
+    <value>Current description:</value>
+  </data>
+  <data name="StatusCurrentlySelected" xml:space="preserve">
+    <value>Currently selected: {0}</value>
+  </data>
+  <data name="StatusDescriptionUpdated" xml:space="preserve">
+    <value>✓ Description updated.</value>
+  </data>
+  <data name="StatusEndOfContent" xml:space="preserve">
+    <value>--- End of content ---</value>
+  </data>
+  <data name="StatusFoundOccurrences" xml:space="preserve">
+    <value>Found {0} occurrence(s).</value>
+  </data>
+  <data name="StatusGoodbye" xml:space="preserve">
+    <value>Goodbye!</value>
+  </data>
+  <data name="StatusImageAdded" xml:space="preserve">
+    <value>✓ Image '{0}' added ({1} KB).</value>
+  </data>
+  <data name="StatusImageSaved" xml:space="preserve">
+    <value>✓ Image saved to '{0}'.</value>
+  </data>
+  <data name="StatusImageSetAsCover" xml:space="preserve">
+    <value>✓ '{0}' set as cover image.</value>
+  </data>
+  <data name="StatusImageSetAsCoverShort" xml:space="preserve">
+    <value>✓ Image set as cover.</value>
+  </data>
+  <data name="StatusLoadingBook" xml:space="preserve">
+    <value>Loading book...</value>
+  </data>
+  <data name="StatusModified" xml:space="preserve">
+    <value>(modified)</value>
+  </data>
+  <data name="StatusNoImagesInBook" xml:space="preserve">
+    <value>No images in book.</value>
+  </data>
+  <data name="StatusPageProgress" xml:space="preserve">
+    <value>--- Page {0}/{1} (Press Enter to continue, 'q' to quit) ---</value>
+  </data>
+  <data name="StatusPlaybackStopped" xml:space="preserve">
+    <value>Playback stopped.</value>
+  </data>
+  <data name="StatusPlayingAudio" xml:space="preserve">
+    <value>Playing audio... (select 'Stop playback' to stop)</value>
+  </data>
+  <data name="StatusPreviewing" xml:space="preserve">
+    <value>Previewing: {0}</value>
+  </data>
+  <data name="StatusReplacedOccurrences" xml:space="preserve">
+    <value>✓ Replaced {0} occurrence(s).</value>
+  </data>
+  <data name="StatusStartingConversion" xml:space="preserve">
+    <value>Starting conversion... This may take a while depending on book length.</value>
+  </data>
+  <data name="StatusTitleUpdated" xml:space="preserve">
+    <value>✓ Title updated to '{0}'.</value>
+  </data>
+  <data name="StatusTotalVoices" xml:space="preserve">
+    <value>Total: {0} voice(s)</value>
+  </data>
+  <data name="StatusUsingVoice" xml:space="preserve">
+    <value>Using voice: {0}</value>
+  </data>
+  <data name="StatusVoiceNotSelected" xml:space="preserve">
+    <value>Not selected</value>
+  </data>
+  <data name="StatusVoiceSet" xml:space="preserve">
+    <value>✓ Voice set to '{0}'.</value>
+  </data>
+</root>
