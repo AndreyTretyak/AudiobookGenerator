@@ -125,8 +125,7 @@ internal sealed class ConversionRunner
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorConversionFailed, Markup.Escape(ex.Message))}[/]");
-            AnsiConsole.WriteException(ex);
+            AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorConversionFailed, Markup.Escape(ex.ToString()))}[/]");
         }
     }
 
