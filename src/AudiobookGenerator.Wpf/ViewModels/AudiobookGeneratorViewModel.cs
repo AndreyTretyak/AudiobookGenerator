@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
-using System.Speech.Synthesis;
 using System.Windows;
 using System.Windows.Input;
 
@@ -55,9 +54,12 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
     private bool isPlaying;
     private BookViewModel? book;
     private Book? latestBookState;
-    private VoiceInfo? selectedVoice;
+    private SpeechProviderInfo? selectedProvider;
+    private SpeechVoice? selectedVoice;
     private int progressPercentage;
     private string progressMessage = "";
+    private int voiceLoadVersion;
+    private CancellationTokenSource? generationCancellation;
 
     public BookViewModel? Book
     {
@@ -69,7 +71,18 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             [SaveImageAsCommand, AddImageCommand, PlayOrStopCommand, GenerateCommand]);
     }
 
-    public bool IsGenerating { get => isGenerating; private set => SetAndRaise(ref isGenerating, value); }
+    public bool IsGenerating =>
+        isGenerating;
+
+    public bool CanConfigureSpeech => !IsGenerating;
+
+    private void SetIsGenerating(bool value) =>
+        SetAndRaise(
+            ref isGenerating,
+            value,
+            [nameof(CanConfigureSpeech)],
+            [GenerateCommand, CancelGenerationCommand],
+            nameof(IsGenerating));
 
     public int ProgressPercentage { get => progressPercentage; private set => SetAndRaise(ref progressPercentage, value); }
 
@@ -81,9 +94,27 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public string PlayStopToolTip { get => isPlaying ? Resources.StopToolTip : Resources.PlayTooltip; }
 
-    public VoiceInfo? SelectedVoice { get => selectedVoice; set => SetAndRaise(ref selectedVoice, value, [nameof(IsVoiceSelected)], [PlayOrStopCommand, GenerateCommand]); }
+    public SpeechProviderInfo? SelectedProvider
+    {
+        get => selectedProvider;
+        set
+        {
+            if (Equals(selectedProvider, value))
+            {
+                return;
+            }
 
-    public ObservableCollection<VoiceInfo> Voices { get; }
+            SetAndRaise(ref selectedProvider, value);
+            SelectedVoice = null;
+            LoadVoicesForSelectedProvider();
+        }
+    }
+
+    public SpeechVoice? SelectedVoice { get => selectedVoice; set => SetAndRaise(ref selectedVoice, value, [nameof(IsVoiceSelected)], [PlayOrStopCommand, GenerateCommand]); }
+
+    public ObservableCollection<SpeechProviderInfo> Providers { get; } = [];
+
+    public ObservableCollection<SpeechVoice> Voices { get; } = [];
 
     public string TextContentSectionHeader => Resources.TextContentSectionHeader + (Book == null ? "" : string.Format(Resources.ChaptersLable, Book.Chapters.Count));
 
@@ -105,7 +136,7 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
 
     public DelegateCommand GenerateCommand { get; }
 
-    public DelegateCommand ShowHowToAddVoiceCommand { get; }
+    public DelegateCommand CancelGenerationCommand { get; }
 
     public AudiobookGeneratorViewModel(
         BookConverter bookConverter,
@@ -114,7 +145,6 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         logger = loggerInstance;
         converter = bookConverter;
 
-        ShowHowToAddVoiceCommand = new DelegateCommand(ShowHowToAddVoiceAsync);
         SelectBookCommand = new DelegateCommand(SelectBookAsync);
         PlayOrStopCommand = new DelegateCommand(PlayOrStopAsync, parameter => this.IsVoiceSelected && this.Book != null && this.Book.SelectedChapter != null);
 
@@ -122,15 +152,36 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         SaveImageAsCommand = new DelegateCommand(SaveImageAsAsync, canExecuteWhenBookSelected);
         AddImageCommand = new DelegateCommand(AddImageAsync, canExecuteWhenBookSelected);
 
-        GenerateCommand = new DelegateCommand(GenerateAsync, parameter => this.IsVoiceSelected && this.IsBookSelected);
+        GenerateCommand = new DelegateCommand(
+            GenerateAsync,
+            parameter => this.IsVoiceSelected && this.IsBookSelected && !this.IsGenerating);
+        CancelGenerationCommand = new DelegateCommand(
+            CancelGenerationAsync,
+            parameter => this.IsGenerating);
 
-        Voices = [.. converter.Synthesizer.GetVoices()];
     }
 
-    private Task ShowHowToAddVoiceAsync(object? parameter)
+    public async Task InitializeAsync()
     {
-        _ = Process.Start(new ProcessStartInfo(Resources.AddVoiceLink) { UseShellExecute = true });
-        return Task.CompletedTask;
+        try
+        {
+            var providers = await converter.Synthesizer.GetProvidersAsync(CancellationToken.None);
+            Providers.Clear();
+            foreach (var provider in providers)
+            {
+                Providers.Add(provider);
+            }
+
+            var defaultProviderId = await converter.Synthesizer.GetDefaultProviderIdAsync(CancellationToken.None);
+            SelectedProvider = null;
+            SelectedProvider = Providers.FirstOrDefault(provider =>
+                string.Equals(provider.Id, defaultProviderId, StringComparison.OrdinalIgnoreCase))
+                ?? Providers.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            ShowError("Unable to load TTS providers", ex);
+        }
     }
 
     private async Task SelectBookAsync(object? parameter)
@@ -184,25 +235,61 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
         }
     }
 
-    private Task PlayOrStopAsync(object? parameter)
+    private async Task PlayOrStopAsync(object? parameter)
     {
         if (this.SelectedVoice == null || this.Book == null || this.Book.SelectedChapter == null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         IsPlaying = !IsPlaying;
 
         if (IsPlaying)
         {
-            converter.Synthesizer.Speak(Book.SelectedChapter.Content, SelectedVoice);
+            try
+            {
+                await converter.Preview.PlayAsync(Book.SelectedChapter.Content, SelectedVoice, CancellationToken.None);
+            }
+            catch
+            {
+                IsPlaying = false;
+                throw;
+            }
         }
         else
         {
-            converter.Synthesizer.StopSpeaking();
+            converter.Preview.Stop();
+        }
+    }
+
+    private async void LoadVoicesForSelectedProvider()
+    {
+        var version = ++voiceLoadVersion;
+        Voices.Clear();
+        var providerId = SelectedProvider?.Id;
+        if (providerId == null)
+        {
+            return;
         }
 
-        return Task.CompletedTask;
+        try
+        {
+            var voices = await converter.Synthesizer.GetVoicesAsync(providerId, CancellationToken.None);
+            if (version != voiceLoadVersion
+                || !string.Equals(SelectedProvider?.Id, providerId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            foreach (var voice in voices)
+            {
+                Voices.Add(voice);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError("Unable to load TTS voices", ex);
+        }
     }
 
     private async Task SaveImageAsAsync(object? parameter)
@@ -280,31 +367,51 @@ internal class AudiobookGeneratorViewModel : BaseViewModel
             return;
         }
 
-        IsGenerating = true;
+        generationCancellation?.Dispose();
+        generationCancellation = new CancellationTokenSource();
+        var cancellationToken = generationCancellation.Token;
+        SetIsGenerating(true);
 
         var output = new FileInfo(dialog.FileName);
 
-        if (!string.Equals(output.Extension, audiobookSupportedExtension, StringComparison.OrdinalIgnoreCase))
+        try
         {
-            throw new InvalidOperationException($"We can only produce {audiobookSupportedExtension} files, not {output.Extension}.");
+            if (!string.Equals(output.Extension, audiobookSupportedExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"We can only produce {audiobookSupportedExtension} files, not {output.Extension}.");
+            }
+
+            var tmpFiles = output.Directory ?? new DirectoryInfo(Path.GetTempPath());
+
+            await converter.ConvertAsync(
+                SelectedVoice,
+                updatedBook,
+                output,
+                tmpFiles,
+                new ActionProgress<ProgressUpdate>(ProgressUpdate),
+                cancellationToken);
+
+            if (output.Directory != null)
+            {
+                _ = Process.Start(new ProcessStartInfo(output.Directory.FullName) { UseShellExecute = true });
+            }
         }
-
-        var tmpFiles = output.Directory ?? new DirectoryInfo(Path.GetTempPath());
-
-        await converter.ConvertAsync(
-            SelectedVoice,
-            updatedBook,
-            output,
-            tmpFiles,
-            new ActionProgress<ProgressUpdate>(ProgressUpdate),
-            CancellationToken.None);
-
-        if (output.Directory != null)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _ = Process.Start(new ProcessStartInfo(output.Directory.FullName) { UseShellExecute = true });
+            ProgressMessage = Resources.GenerationCancelledMessage;
         }
+        finally
+        {
+            SetIsGenerating(false);
+            generationCancellation.Dispose();
+            generationCancellation = null;
+        }
+    }
 
-        IsGenerating = false;
+    private Task CancelGenerationAsync(object? parameter)
+    {
+        generationCancellation?.Cancel();
+        return Task.CompletedTask;
     }
 
     private void ProgressUpdate(ProgressUpdate progress)

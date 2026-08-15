@@ -4,7 +4,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:YewCone.AudiobookGenerator.Wpf"
-        xmlns:speech="clr-namespace:System.Speech.Synthesis;assembly=System.Speech"
         xmlns:core="clr-namespace:YewCone.AudiobookGenerator.Core;assembly=YewCone.AudiobookGenerator.Core"
         xmlns:viewModels="clr-namespace:YewCone.AudiobookGenerator.Wpf.ViewModels"
         mc:Ignorable="d"
@@ -27,10 +26,20 @@
         <DataTemplate DataType="{x:Type core:BookImage}">
             <TextBlock Text="{Binding FileName}" />
         </DataTemplate>
-        <DataTemplate DataType="{x:Type speech:VoiceInfo}">
+        <DataTemplate DataType="{x:Type core:SpeechProviderInfo}">
+            <TextBlock>
+                <Run Text="{Binding DisplayName, Mode=OneTime}" />
+                <Run Text=" [" />
+                <Run Text="{Binding Id, Mode=OneTime}" />
+                <Run Text="]" />
+            </TextBlock>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type core:SpeechVoice}">
             <TextBlock>
                 <Run Text="{Binding Name, Mode=OneTime}" />
-                <Run Text="(" />
+                <Run Text=" [" />
+                <Run Text="{Binding Id, Mode=OneTime}" />
+                <Run Text="] (" />
                 <Run Text="{Binding Culture, Mode=OneTime}" />
                 <Run Text=", " />
                 <Run Text="{Binding Gender, Mode=OneTime}" />
@@ -85,6 +94,13 @@
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
                     </TextBlock>
                 </Button>
+                <Button DockPanel.Dock="Top"
+                        Margin="0 0 5 0"
+                        VerticalAlignment="Stretch"
+                        HorizontalAlignment="Right"
+                        Command="{Binding CancelGenerationCommand, Mode=OneTime}"
+                        Content="{x:Static local:Resources.CancelGenerationLabel}"
+                        Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <TextBlock DockPanel.Dock="Bottom"
                         Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
                         Text="{Binding ProgressMessage, Mode=OneWay}"/>
@@ -95,14 +111,12 @@
             <DockPanel
                 DockPanel.Dock="Bottom"
                 LastChildFill="True">
-                <TextBlock
+                <Button
                     Margin="5 0"
                     DockPanel.Dock="Right"
-                    VerticalAlignment="Center">
-                    <Hyperlink Command="{Binding ShowHowToAddVoiceCommand, Mode=OneTime}">
-                        <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
-                    </Hyperlink>
-                </TextBlock>
+                    Click="HandleTtsSettingsClick"
+                    Content="{x:Static local:Resources.TtsSettingsLabel}"
+                    IsEnabled="{Binding CanConfigureSpeech}" />
                 <Button DockPanel.Dock="Right"
                     Command="{Binding PlayOrStopCommand, Mode=OneTime}" 
                     Visibility="{Binding IsVoiceSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -113,11 +127,24 @@
                 <TextBlock
                     DockPanel.Dock="Left"
                     VerticalAlignment="Center"
+                    Text="{x:Static local:Resources.ProviderLabel}"/>
+                <ComboBox
+                    DockPanel.Dock="Left"
+                    MinWidth="150"
+                    Margin="5 0"
+                    IsEnabled="{Binding CanConfigureSpeech}"
+                    ItemsSource="{Binding Providers, Mode=OneTime}"
+                    SelectedItem="{Binding SelectedProvider, Mode=TwoWay}"/>
+                <TextBlock
+                    DockPanel.Dock="Left"
+                    Margin="5 0 0 0"
+                    VerticalAlignment="Center"
                     Text="{x:Static local:Resources.SelectVoiceLable}"/>
                 <ComboBox
                     DockPanel.Dock="Left"
                     Margin="5 0"
                     HorizontalAlignment="Stretch"
+                    IsEnabled="{Binding CanConfigureSpeech}"
                     Text="{x:Static local:Resources.VoicePlaceholder}"
                     ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
             </DockPanel>

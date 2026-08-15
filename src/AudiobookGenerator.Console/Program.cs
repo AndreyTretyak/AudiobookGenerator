@@ -36,8 +36,21 @@ internal class Program
 
         var converter = host.Services.GetRequiredService<BookConverter>();
 
-        // Parse command line arguments
-        return await ParseAndRunAsync(args, converter, cancellationToken);
+        try
+        {
+            return await ParseAndRunAsync(args, converter, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AnsiConsole.MarkupLine("[yellow]Operation cancelled.[/]");
+            return 130;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
+            AnsiConsole.WriteException(ex);
+            return 1;
+        }
     }
 
     private static async Task<int> ParseAndRunAsync(string[] args, BookConverter converter, CancellationToken cancellationToken)
@@ -54,7 +67,8 @@ internal class Program
         {
             "open" => await RunInteractiveAsync(args, converter, cancellationToken),
             "convert" => await RunDirectConvertAsync(args, converter, cancellationToken),
-            "voices" => RunListVoices(converter),
+            "voices" => await RunListVoicesAsync(args, converter, cancellationToken),
+            "tts" => await RunTtsSettingsAsync(converter, cancellationToken),
             "info" => await RunInfoAsync(args, converter, cancellationToken),
             "help" or "--help" or "-h" or "/?" => ShowHelp(),
             _ when File.Exists(args[0].Trim('\"')) => await RunInteractiveAsync(["open", args[0]], converter, cancellationToken),
@@ -95,6 +109,11 @@ internal class Program
             "[dim]audiobook voices[/]");
 
         _ = table.AddRow(
+            "[blue]tts[/]",
+            Strings.HelpTtsDescription,
+            "[dim]audiobook tts[/]");
+
+        _ = table.AddRow(
             "[blue]info[/] [dim]<file>[/]",
             Strings.HelpInfoDescription,
             "[dim]audiobook info book.epub[/]");
@@ -109,6 +128,7 @@ internal class Program
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"[dim]{Strings.HelpConvertOptions}[/]");
         AnsiConsole.MarkupLine($"  [blue]--voice[/] [dim]<name>[/]    {Strings.HelpVoiceOption}");
+        AnsiConsole.MarkupLine($"  [blue]--provider[/] [dim]<id>[/]    {Strings.HelpProviderOption}");
         AnsiConsole.MarkupLine($"  [blue]--output[/] [dim]<dir>[/]    {Strings.HelpOutputOption}");
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"[dim]{Strings.HelpTipDragDrop}[/]");
@@ -151,6 +171,7 @@ internal class Program
         var metadataEditor = new MetadataEditor();
         var voiceSelector = new VoiceSelector();
         var audioPreviewer = new AudioPreviewer();
+        var ttsSettingsMenu = new TtsSettingsMenu(converter.TtsSettingsStore, converter.Synthesizer, converter.Preview);
         var conversionRunner = new ConversionRunner();
 
         var menu = new InteractiveMenu(
@@ -161,6 +182,7 @@ internal class Program
             metadataEditor,
             voiceSelector,
             audioPreviewer,
+            ttsSettingsMenu,
             conversionRunner);
 
         await menu.RunAsync(cancellationToken);
@@ -185,6 +207,7 @@ internal class Program
 
         // Parse options
         string? voiceName = null;
+        string? providerId = null;
         string? outputDir = null;
 
         for (var i = 2; i < args.Length; i++)
@@ -193,6 +216,9 @@ internal class Program
             {
                 case "--voice" or "-v" when i + 1 < args.Length:
                     voiceName = args[++i];
+                    break;
+                case "--provider" or "-p" when i + 1 < args.Length:
+                    providerId = args[++i];
                     break;
                 case "--output" or "-o" when i + 1 < args.Length:
                     outputDir = args[++i].Trim('\"');
@@ -213,12 +239,21 @@ internal class Program
         var session = new BookEditSession(book);
 
         // Find voice
-        var voices = converter.Synthesizer.GetVoices().ToList();
+        providerId ??= await converter.Synthesizer.GetDefaultProviderIdAsync(cancellationToken);
+        IReadOnlyList<SpeechVoice> voices;
+        try
+        {
+            voices = await converter.Synthesizer.GetVoicesAsync(providerId, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
+            return 1;
+        }
 
         if (voiceName != null)
         {
-            var matchedVoice = voices.FirstOrDefault(v =>
-                v.Name.Contains(voiceName, StringComparison.OrdinalIgnoreCase));
+            var matchedVoice = FindVoice(voices, voiceName);
 
             if (matchedVoice == null)
             {
@@ -237,7 +272,7 @@ internal class Program
         {
             // Prompt for voice
             var voiceSelector = new VoiceSelector();
-            await voiceSelector.RunAsync(session, converter.Synthesizer, cancellationToken);
+            await voiceSelector.RunAsync(session, converter.Synthesizer, cancellationToken, providerId);
 
             if (session.SelectedVoice == null)
             {
@@ -258,52 +293,110 @@ internal class Program
         var outputFile = new FileInfo(Path.Combine(outputDir, $"{book.FileName}.m4b"));
 
         AnsiConsole.MarkupLine($"[blue]{Strings.LabelBook}:[/] {Markup.Escape(book.Title)}");
+        AnsiConsole.MarkupLine($"[blue]{Strings.LabelProvider}:[/] {Markup.Escape(session.SelectedVoice.ProviderId)}");
         AnsiConsole.MarkupLine($"[blue]{Strings.LabelVoice}:[/] {Markup.Escape(session.SelectedVoice.Name)}");
         AnsiConsole.MarkupLine($"[blue]{Strings.LabelOutput}:[/] {Markup.Escape(outputFile.FullName)}");
         AnsiConsole.WriteLine();
 
         // Run conversion
         var conversionRunner = new ConversionRunner();
-        await conversionRunner.RunAsync(session, converter, cancellationToken);
+        await conversionRunner.RunAsync(session, converter, cancellationToken, new DirectoryInfo(outputDir));
 
         return 0;
     }
 
-    private static int RunListVoices(BookConverter converter)
+    private static async Task<int> RunListVoicesAsync(
+        string[] args,
+        BookConverter converter,
+        CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule($"[bold green]{Strings.HeaderAvailableTTSVoices}[/]"));
         AnsiConsole.WriteLine();
 
-        var voices = converter.Synthesizer.GetVoices().ToList();
+        string? requestedProviderId = null;
+        for (var index = 1; index < args.Length; index++)
+        {
+            if (args[index] is "--provider" or "-p" && index + 1 < args.Length)
+            {
+                requestedProviderId = args[++index];
+            }
+        }
 
-        if (voices.Count == 0)
+        var providers = await converter.Synthesizer.GetProvidersAsync(cancellationToken);
+        var selectedProviders = requestedProviderId == null
+            ? providers
+            : providers.Where(provider => string.Equals(provider.Id, requestedProviderId, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        if (selectedProviders.Count == 0)
+        {
+            AnsiConsole.MarkupLine($"[red]TTS provider not found: {Markup.Escape(requestedProviderId!)}[/]");
+            return 1;
+        }
+
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .AddColumn("Provider")
+            .AddColumn(Strings.ColumnName)
+            .AddColumn("ID")
+            .AddColumn(Strings.ColumnCulture)
+            .AddColumn(Strings.ColumnGender)
+            .AddColumn(Strings.ColumnAge);
+
+        var voiceCount = 0;
+        foreach (var provider in selectedProviders)
+        {
+            var voices = await converter.Synthesizer.GetVoicesAsync(provider.Id, cancellationToken);
+            foreach (var voice in voices)
+            {
+                _ = table.AddRow(
+                    Markup.Escape(provider.DisplayName),
+                    Markup.Escape(voice.Name),
+                    Markup.Escape(voice.Id),
+                    Markup.Escape(voice.Culture ?? "-"),
+                    Markup.Escape(voice.Gender ?? "-"),
+                    Markup.Escape(voice.Age ?? "-"));
+                voiceCount++;
+            }
+        }
+
+        if (voiceCount == 0)
         {
             AnsiConsole.MarkupLine($"[yellow]{Strings.ErrorNoVoicesFound}[/]");
             AnsiConsole.MarkupLine($"[dim]{Strings.HintInstallVoices}[/]");
             return 1;
         }
 
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .AddColumn(Strings.ColumnName)
-            .AddColumn(Strings.ColumnCulture)
-            .AddColumn(Strings.ColumnGender)
-            .AddColumn(Strings.ColumnAge);
-
-        foreach (var voice in voices)
-        {
-            _ = table.AddRow(
-                voice.Name,
-                voice.Culture.DisplayName,
-                voice.Gender.ToString(),
-                voice.Age.ToString());
-        }
-
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusTotalVoices, voices.Count)}[/]");
+        AnsiConsole.MarkupLine($"[dim]{string.Format(Strings.StatusTotalVoices, voiceCount)}[/]");
 
+        return 0;
+    }
+
+    private static SpeechVoice? FindVoice(IReadOnlyList<SpeechVoice> voices, string query)
+    {
+        var exact = voices.FirstOrDefault(voice =>
+            string.Equals(voice.Id, query, StringComparison.OrdinalIgnoreCase));
+        if (exact != null)
+        {
+            return exact;
+        }
+
+        var matches = voices
+            .Where(voice =>
+                voice.Id.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || voice.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
+    private static async Task<int> RunTtsSettingsAsync(BookConverter converter, CancellationToken cancellationToken)
+    {
+        var menu = new TtsSettingsMenu(converter.TtsSettingsStore, converter.Synthesizer, converter.Preview);
+        await menu.RunAsync(cancellationToken);
         return 0;
     }
 

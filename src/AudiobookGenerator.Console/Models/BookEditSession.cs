@@ -1,5 +1,3 @@
-using System.Speech.Synthesis;
-
 using YewCone.AudiobookGenerator.Core;
 
 namespace YewCone.AudiobookGenerator.Console.Models;
@@ -54,7 +52,7 @@ internal sealed class BookEditSession
     /// <summary>
     /// Currently selected TTS voice for conversion.
     /// </summary>
-    public VoiceInfo? SelectedVoice { get; set; }
+    public SpeechVoice? SelectedVoice { get; set; }
 
     /// <summary>
     /// Gets all chapters with their current content (edited or original).

@@ -16,7 +16,11 @@ internal sealed class ConversionRunner
     /// <summary>
     /// Runs the conversion workflow.
     /// </summary>
-    public async Task RunAsync(BookEditSession session, BookConverter converter, CancellationToken cancellationToken)
+    public async Task RunAsync(
+        BookEditSession session,
+        BookConverter converter,
+        CancellationToken cancellationToken,
+        DirectoryInfo? requestedOutputDirectory = null)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderGenerateAudiobook}[/]").LeftJustified());
@@ -28,20 +32,27 @@ internal sealed class ConversionRunner
             return;
         }
 
-        // Prompt for output directory
-        var outputPath = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>(Strings.PromptOutputDirectory)
-                .DefaultValue(Environment.GetFolderPath(Environment.SpecialFolder.Desktop))
-                .Validate(path =>
-                {
-                    var trimmed = path.Trim('\"');
-                    return Directory.Exists(trimmed)
-                        ? ValidationResult.Success()
-                        : ValidationResult.Error(Strings.ErrorDirectoryDoesNotExist);
-                }),
-            cancellationToken);
+        DirectoryInfo outputDir;
+        if (requestedOutputDirectory == null)
+        {
+            var outputPath = await AnsiConsole.PromptAsync(
+                new TextPrompt<string>(Strings.PromptOutputDirectory)
+                    .DefaultValue(Environment.GetFolderPath(Environment.SpecialFolder.Desktop))
+                    .Validate(path =>
+                    {
+                        var trimmed = path.Trim('\"');
+                        return Directory.Exists(trimmed)
+                            ? ValidationResult.Success()
+                            : ValidationResult.Error(Strings.ErrorDirectoryDoesNotExist);
+                    }),
+                cancellationToken);
+            outputDir = new DirectoryInfo(outputPath.Trim('\"'));
+        }
+        else
+        {
+            outputDir = requestedOutputDirectory;
+        }
 
-        var outputDir = new DirectoryInfo(outputPath.Trim('\"'));
         var outputFile = new FileInfo(Path.Combine(outputDir.FullName, $"{session.FileName}.m4b"));
 
         // Check if file exists

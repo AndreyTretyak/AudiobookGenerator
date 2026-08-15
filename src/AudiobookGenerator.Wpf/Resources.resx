@@ -213,4 +213,16 @@
   <data name="BookOpenError" xml:space="preserve">
     <value>Error when opening book</value>
   </data>
+  <data name="ProviderLabel" xml:space="preserve">
+    <value>Provider</value>
+  </data>
+  <data name="TtsSettingsLabel" xml:space="preserve">
+    <value>TTS settings...</value>
+  </data>
+  <data name="CancelGenerationLabel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="GenerationCancelledMessage" xml:space="preserve">
+    <value>Audiobook generation cancelled.</value>
+  </data>
 </root>

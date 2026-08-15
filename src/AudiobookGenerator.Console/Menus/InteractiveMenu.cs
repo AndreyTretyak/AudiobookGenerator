@@ -17,6 +17,7 @@ internal sealed class InteractiveMenu(
     MetadataEditor metadataEditor,
     VoiceSelector voiceSelector,
     AudioPreviewer audioPreviewer,
+    TtsSettingsMenu ttsSettingsMenu,
     ConversionRunner conversionRunner)
 {
     /// <summary>
@@ -29,7 +30,7 @@ internal sealed class InteractiveMenu(
         while (true)
         {
             var voiceStatus = session.SelectedVoice != null
-                ? $"[green]{Markup.Escape(session.SelectedVoice.Name)}[/]"
+                ? $"[green]{Markup.Escape(session.SelectedVoice.Name)}[/] [dim]({Markup.Escape(session.SelectedVoice.ProviderId)})[/]"
                 : $"[yellow]{Strings.StatusVoiceNotSelected}[/]";
 
             var editStatus = session.HasEdits ? $" [dim]{Strings.StatusModified}[/]" : "";
@@ -48,6 +49,7 @@ internal sealed class InteractiveMenu(
                         Strings.MenuManageImages,
                         Strings.MenuEditMetadata,
                         Strings.MenuSelectVoice,
+                        Strings.MenuConfigureTtsProviders,
                         Strings.MenuPreviewAudio,
                         Strings.MenuGenerateAudiobook,
                         Strings.MenuShowBookInfo,
@@ -71,9 +73,30 @@ internal sealed class InteractiveMenu(
             {
                 await voiceSelector.RunAsync(session, converter.Synthesizer, cancellationToken);
             }
+            else if (choice == Strings.MenuConfigureTtsProviders)
+            {
+                await ttsSettingsMenu.RunAsync(cancellationToken);
+                if (session.SelectedVoice != null)
+                {
+                    try
+                    {
+                        var voices = await converter.Synthesizer.GetVoicesAsync(
+                            session.SelectedVoice.ProviderId,
+                            cancellationToken);
+                        if (!voices.Any(voice => string.Equals(voice.Id, session.SelectedVoice.Id, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            session.SelectedVoice = null;
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        session.SelectedVoice = null;
+                    }
+                }
+            }
             else if (choice == Strings.MenuPreviewAudio)
             {
-                await audioPreviewer.RunAsync(session, converter.Synthesizer, cancellationToken);
+                await audioPreviewer.RunAsync(session, converter.Preview, cancellationToken);
             }
             else if (choice == Strings.MenuGenerateAudiobook)
             {

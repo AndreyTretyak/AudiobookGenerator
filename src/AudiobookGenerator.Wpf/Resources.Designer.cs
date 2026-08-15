@@ -347,4 +347,28 @@ public class Resources {
             return ResourceManager.GetString("VoicePlaceholder", resourceCulture);
         }
     }
+
+    public static string ProviderLabel {
+        get {
+            return ResourceManager.GetString("ProviderLabel", resourceCulture);
+        }
+    }
+
+    public static string TtsSettingsLabel {
+        get {
+            return ResourceManager.GetString("TtsSettingsLabel", resourceCulture);
+        }
+    }
+
+    public static string CancelGenerationLabel {
+        get {
+            return ResourceManager.GetString("CancelGenerationLabel", resourceCulture);
+        }
+    }
+
+    public static string GenerationCancelledMessage {
+        get {
+            return ResourceManager.GetString("GenerationCancelledMessage", resourceCulture);
+        }
+    }
 }

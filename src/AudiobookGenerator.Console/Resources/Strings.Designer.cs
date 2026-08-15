@@ -1679,5 +1679,35 @@ namespace YewCone.AudiobookGenerator.Console.Resources {
                 return ResourceManager.GetString("StatusVoiceSet", resourceCulture);
             }
         }
+
+        internal static string HelpProviderOption {
+            get {
+                return ResourceManager.GetString("HelpProviderOption", resourceCulture);
+            }
+        }
+
+        internal static string HelpTtsDescription {
+            get {
+                return ResourceManager.GetString("HelpTtsDescription", resourceCulture);
+            }
+        }
+
+        internal static string LabelProvider {
+            get {
+                return ResourceManager.GetString("LabelProvider", resourceCulture);
+            }
+        }
+
+        internal static string MenuConfigureTtsProviders {
+            get {
+                return ResourceManager.GetString("MenuConfigureTtsProviders", resourceCulture);
+            }
+        }
+
+        internal static string PromptSelectProvider {
+            get {
+                return ResourceManager.GetString("PromptSelectProvider", resourceCulture);
+            }
+        }
     }
 }

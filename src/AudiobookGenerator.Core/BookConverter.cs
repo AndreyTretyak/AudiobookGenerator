@@ -1,6 +1,5 @@
-﻿using FFMpegCore;
+using FFMpegCore;
 using FFMpegCore.Enums;
-using FFMpegCore.Pipes;
 
 using HtmlAgilityPack;
 
@@ -8,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using System.Diagnostics;
-using System.Speech.Synthesis;
 using System.Text.RegularExpressions;
 
 using TagLib;
@@ -20,13 +18,25 @@ namespace YewCone.AudiobookGenerator.Core;
 
 public static class AudioBookConverterDependencyInjectionExtensions
 {
-    public static IServiceCollection AddBookConverter(this IServiceCollection services)
+    public static IServiceCollection AddBookConverter(this IServiceCollection services, string? ttsSettingsPath = null)
     {
+        ttsSettingsPath ??= Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "YewCone",
+            "AudiobookGenerator",
+            "tts-settings.json");
+
         return services
             .AddSingleton<IAudioConverter, FfmpegAudioConverter>()
             .AddSingleton<IHtmlConverter, HtmlAgilityPackHtmlConverter>()
             .AddSingleton<IEpubBookParser, VersOneEpubBookParser>()
-            .AddSingleton<IAudioSynthesizer, LocalAudioSynthesizer>()
+            .AddSingleton(new TtsSettingsStoreOptions(ttsSettingsPath))
+            .AddSingleton<ITtsSettingsStore, JsonTtsSettingsStore>()
+            .AddSingleton<WindowsSpeechProvider>()
+            .AddSingleton<IAudioSynthesizer, AudioSynthesizer>()
+            .AddSingleton<IAudioPreviewService, WaveAudioPreviewService>()
+            .AddSingleton<ITextChunker, NaturalTextChunker>()
+            .AddHttpClient()
             .AddSingleton<BookConverter>();
     }
 }
@@ -54,20 +64,9 @@ public interface IHtmlConverter
     Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
 }
 
-public interface IAudioSynthesizer
-{
-    IEnumerable<VoiceInfo> GetVoices();
-
-    void Speak(string text, VoiceInfo voice);
-
-    void StopSpeaking();
-
-    Task<Stream> SynthesizeWavFromTextAsync(string name, string content, VoiceInfo voice, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
-}
-
 public interface IAudioConverter
 {
-    Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
+    Task ConvertWavToAacAsync(IEnumerable<FileInfo> wavFiles, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
 
     Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
 
@@ -89,6 +88,7 @@ internal static class DirectoryInfoExtension
 
 public class FfmpegAudioConverter : IAudioConverter
 {
+    private readonly object initializeGate = new();
     private Task? initializeTask;
 
     public Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
@@ -97,7 +97,7 @@ public class FfmpegAudioConverter : IAudioConverter
 
         using var state = progress.Start(Path.GetFileNameWithoutExtension(m4bFile.Name), StageType.UpdatingM4bMetadata);
 
-        var file = TagLib.File.Create(m4bFile.FullName);
+        using var file = TagLib.File.Create(m4bFile.FullName);
 
         IPicture? coverImage = null;
         if (bookInfo.CoverImage != null)
@@ -120,13 +120,20 @@ public class FfmpegAudioConverter : IAudioConverter
         return Task.CompletedTask;
     }
 
-    public async Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
+    public async Task ConvertWavToAacAsync(IEnumerable<FileInfo> wavFiles, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
+        var inputs = wavFiles.Select(static file => file.FullName).ToArray();
+        if (inputs.Length == 0)
+        {
+            throw new InvalidOperationException($"No synthesized audio was produced for '{outputFile.Name}'.");
+        }
+
         await EnsureInitializedAsync(progress, cancellationToken).ConfigureAwait(false);
         using var state = progress.Start(Path.GetFileNameWithoutExtension(outputFile.Name), StageType.ConvertWavToAac);
         _ = await FFMpegArguments
-            .FromPipeInput(new StreamPipeSource(wavStream))
+            .FromConcatInput(inputs)
             .OutputToFile(outputFile.FullName, true, options => options.WithAudioCodec(AudioCodec.Aac))
+            .CancellableThrough(cancellationToken)
             .ProcessAsynchronously()
             .ConfigureAwait(false);
     }
@@ -134,101 +141,171 @@ public class FfmpegAudioConverter : IAudioConverter
     public async Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
         using var state = progress.Start(Path.GetFileNameWithoutExtension(outputFile.Name), StageType.MergingIntoM4b);
-
-        var files = aacChapters.Select(f => f.FullName);
-
-        var chaptersFile = outputFile.GetFileInSameDir("chapters.txt");
-        using (StreamWriter stream = new StreamWriter(chaptersFile))
+        var files = aacChapters.Select(static file => file.FullName).ToArray();
+        if (files.Length == 0)
         {
-            stream.WriteLine(";FFMETADATA1");
-
-            long start = 0;
-            foreach (var file in files)
-            {
-                var mediaInfo = await FFProbe.AnalyseAsync(file, cancellationToken: cancellationToken);
-                var end = start + (long)mediaInfo.Duration.TotalMilliseconds;
-
-                stream.WriteLine("[CHAPTER]");
-                stream.WriteLine("TIMEBASE=1/1000");
-                stream.WriteLine($"START={start}");
-                stream.WriteLine($"END={end}");
-                stream.WriteLine($"title={Path.GetFileNameWithoutExtension(file)}");
-                stream.WriteLine("");
-
-                start = end + 1;
-            }
+            throw new InvalidOperationException($"No chapter audio was produced for '{outputFile.Name}'.");
         }
 
         await EnsureInitializedAsync(progress, cancellationToken).ConfigureAwait(false);
-        _ = await FFMpegArguments
-            .FromConcatInput(files)
-            .AddFileInput(chaptersFile)
-            .OutputToFile(outputFile.FullName, true)
-            .ProcessAsynchronously()
-            .ConfigureAwait(false);
+        var chaptersFile = outputFile.GetFileInSameDir(
+            $".{Path.GetFileNameWithoutExtension(outputFile.Name)}.{Guid.NewGuid():N}.chapters.txt");
+        try
+        {
+            using (StreamWriter stream = new StreamWriter(chaptersFile))
+            {
+                stream.WriteLine(";FFMETADATA1");
+
+                long start = 0;
+                foreach (var file in files)
+                {
+                    var mediaInfo = await FFProbe.AnalyseAsync(file, cancellationToken: cancellationToken);
+                    var end = start + (long)mediaInfo.Duration.TotalMilliseconds;
+
+                    stream.WriteLine("[CHAPTER]");
+                    stream.WriteLine("TIMEBASE=1/1000");
+                    stream.WriteLine($"START={start}");
+                    stream.WriteLine($"END={end}");
+                    stream.WriteLine($"title={Path.GetFileNameWithoutExtension(file)}");
+                    stream.WriteLine("");
+
+                    start = end + 1;
+                }
+            }
+
+            _ = await FFMpegArguments
+                .FromConcatInput(files)
+                .AddFileInput(chaptersFile)
+                .OutputToFile(outputFile.FullName, true)
+                .CancellableThrough(cancellationToken)
+                .ProcessAsynchronously()
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            System.IO.File.Delete(chaptersFile);
+        }
     }
 
     public async Task InitializeAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var state = progress.Start("FFmpeg", StageType.Installing);
-        Process process = new();
-        process.StartInfo.FileName = "cmd.exe";
-        process.StartInfo.Arguments = "/c winget install ffmpeg --accept-source-agreements";
-        process.StartInfo.RedirectStandardOutput = true;
+        if (await IsFfmpegAvailableAsync(cancellationToken))
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        using Process process = new();
+        process.StartInfo.FileName = "winget";
+        process.StartInfo.ArgumentList.Add("install");
+        process.StartInfo.ArgumentList.Add("ffmpeg");
+        process.StartInfo.ArgumentList.Add("--accept-source-agreements");
+        process.StartInfo.ArgumentList.Add("--accept-package-agreements");
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.CreateNoWindow = true;
         _ = process.Start();
-        await process.WaitForExitAsync(cancellationToken);
+        await WaitForExitOrTerminateAsync(process, cancellationToken);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"FFmpeg installation failed with exit code {process.ExitCode}.");
+        }
     }
 
-    private Task EnsureInitializedAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken) => initializeTask ??= InitializeAsync(progress, cancellationToken);
-}
-
-public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAudioSynthesizer
-{
-    private readonly SpeechSynthesizer _speechSynthesizer = new();
-
-    public IEnumerable<VoiceInfo> GetVoices() => _speechSynthesizer.GetInstalledVoices().Select(voice => voice.VoiceInfo);
-
-    public void Speak(string text, VoiceInfo voice)
+    private async Task EnsureInitializedAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
-        var builder = new PromptBuilder(voice.Culture);
-        builder.AppendText(text);
-        _speechSynthesizer.SelectVoice(voice.Name);
-        _speechSynthesizer.SpeakAsyncCancelAll();
-        _ = _speechSynthesizer.SpeakAsync(builder);
-    }
+        Task initialization;
+        lock (initializeGate)
+        {
+            if (initializeTask is null || initializeTask.IsCanceled || initializeTask.IsFaulted)
+            {
+                initializeTask = InitializeAsync(progress, cancellationToken);
+            }
 
-    public void StopSpeaking() => _speechSynthesizer.SpeakAsyncCancelAll();
+            initialization = initializeTask;
+        }
 
-    public Task<Stream> SynthesizeWavFromTextAsync(
-        string name,
-        string content,
-        VoiceInfo voice,
-        IProgress<ProgressUpdate> progress,
-        CancellationToken cancellationToken)
-    {
-        using var state = progress.Start(name, StageType.ConvertTextToWav);
         try
         {
-            logger.LogInformation($"Starting for {name}", ConsoleColor.Yellow);
-            var builder = new PromptBuilder(voice.Culture);
-            builder.AppendText(content);
-            _speechSynthesizer.SelectVoice(voice.Name);
-
-            var speechStream = new MemoryStream();
-            _speechSynthesizer.SetOutputToWaveStream(speechStream);
-            _speechSynthesizer.Speak(builder);
-            speechStream.Position = 0;
-
-            logger.LogInformation($"Succeeded for {name}", ConsoleColor.Green);
-
-            return Task.FromResult<Stream>(speechStream);
+            await initialization.WaitAsync(cancellationToken);
         }
-        catch (Exception ex)
+        catch
         {
-            logger.LogError($"Failed for {name} with ex: {ex}", ConsoleColor.Red);
-            return Task.FromResult(Stream.Null);
+            lock (initializeGate)
+            {
+                if (ReferenceEquals(initializeTask, initialization)
+                    && (initialization.IsCanceled || initialization.IsFaulted))
+                {
+                    initializeTask = null;
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<bool> IsFfmpegAvailableAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using Process process = new();
+        process.StartInfo.FileName = "ffmpeg";
+        process.StartInfo.ArgumentList.Add("-version");
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+
+        try
+        {
+            _ = process.Start();
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
+
+        await WaitForExitOrTerminateAsync(process, cancellationToken);
+        return process.ExitCode == 0;
+    }
+
+    private static async Task WaitForExitOrTerminateAsync(Process process, CancellationToken cancellationToken)
+    {
+        using var cancellationRegistration = cancellationToken.Register(
+            static state => TerminateProcess((Process)state!),
+            process);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (!process.HasExited)
+            {
+                await process.WaitForExitAsync(CancellationToken.None);
+            }
+
+            throw;
+        }
+    }
+
+    private static void TerminateProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between the HasExited check and Kill.
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // The process exited or became inaccessible during cancellation.
         }
     }
 }
@@ -392,6 +469,9 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
 public sealed class BookConverter(
     IEpubBookParser bookParser,
     IAudioSynthesizer synthesizer,
+    IAudioPreviewService previewService,
+    ITtsSettingsStore ttsSettings,
+    ITextChunker textChunker,
     IAudioConverter audioConverter,
     ILogger<BookConverter> logger)
 {
@@ -399,23 +479,95 @@ public sealed class BookConverter(
 
     public IAudioSynthesizer Synthesizer { get; } = synthesizer;
 
+    public IAudioPreviewService Preview { get; } = previewService;
+
+    public ITtsSettingsStore TtsSettingsStore { get; } = ttsSettings;
+
     public async Task ConvertAsync(
-        VoiceInfo voice,
+        SpeechVoice voice,
         Book book,
         FileInfo output,
         DirectoryInfo tmpFileDir,
         IProgress<ProgressUpdate> progress,
         CancellationToken cancellationToken)
     {
-        var bookOutDir = tmpFileDir.CreateSubdirectory(Path.GetFileNameWithoutExtension(book.FileName));
+        var emptyChapter = book.Chapters.FirstOrDefault(static chapter => string.IsNullOrWhiteSpace(chapter.Content));
+        if (emptyChapter != null)
+        {
+            throw new InvalidOperationException(
+                $"Chapter '{emptyChapter.Name}' has no narration text. Add chapter text before generating the audiobook.");
+        }
+
+        var synthesisSession = await Synthesizer.CreateSessionAsync(voice, cancellationToken);
+        var bookOutDir = tmpFileDir.CreateSubdirectory($".audiobookgenerator-{Guid.NewGuid():N}");
+        try
+        {
+            await ConvertCoreAsync(synthesisSession, book, output, bookOutDir, progress, cancellationToken);
+        }
+        finally
+        {
+            if (bookOutDir.Exists)
+            {
+                bookOutDir.Delete(recursive: true);
+            }
+        }
+    }
+
+    private async Task ConvertCoreAsync(
+        IAudioSynthesisSession synthesisSession,
+        Book book,
+        FileInfo output,
+        DirectoryInfo bookOutDir,
+        IProgress<ProgressUpdate> progress,
+        CancellationToken cancellationToken)
+    {
+        var wavDir = bookOutDir.CreateSubdirectory("wav");
         var aacDir = bookOutDir.CreateSubdirectory("aac");
         var imageDir = bookOutDir.CreateSubdirectory("images");
 
         foreach (var chapter in book.Chapters)
         {
-            Stream? stream = await Synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, progress, cancellationToken);
+            List<FileInfo> chapterWavFiles;
+            progress.Report(new(chapter.Name, StageType.ConvertTextToWav, Progress.Started));
+            try
+            {
+                var chunks = textChunker.Split(chapter.Content, synthesisSession.MaximumInputCharacters);
+                chapterWavFiles = new List<FileInfo>(chunks.Count);
+
+                for (var chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await using var stream = await synthesisSession.SynthesizeWavAsync(chunks[chunkIndex], cancellationToken);
+                    var wavFile = wavDir.GetSubFile($"{chapter.FileName}.{chunkIndex + 1:0000}.wav");
+                    await using (var outputStream = new FileStream(
+                        wavFile.FullName,
+                        FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 81920,
+                        FileOptions.Asynchronous))
+                    {
+                        await stream.CopyToAsync(outputStream, cancellationToken);
+                    }
+
+                    if (wavFile.Length == 0)
+                    {
+                        throw new InvalidDataException($"TTS provider returned empty audio for chapter '{chapter.Name}', chunk {chunkIndex + 1}.");
+                    }
+
+                    chapterWavFiles.Add(wavFile);
+                }
+
+            }
+            catch
+            {
+                progress.Report(new(chapter.Name, StageType.ConvertTextToWav, Progress.Failed));
+                throw;
+            }
+
+            progress.Report(new(chapter.Name, StageType.ConvertTextToWav, Progress.Done));
             var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
-            await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, progress, cancellationToken); // TODO: consider passing Name, for better reporting
+            await audioConverter.ConvertWavToAacAsync(chapterWavFiles, chapterAacOutput, progress, cancellationToken);
         }
 
         foreach (var image in book.Images)
@@ -429,7 +581,11 @@ public sealed class BookConverter(
         }
 
         logger.LogInformation("Joining");
-        await audioConverter.CreateM4bAsync(aacDir.GetFiles(), output, progress, cancellationToken);
+        await audioConverter.CreateM4bAsync(
+            aacDir.GetFiles().OrderBy(static file => file.Name, StringComparer.Ordinal),
+            output,
+            progress,
+            cancellationToken);
         logger.LogInformation("Done joining");
 
         logger.LogInformation($"Adding cover image");
@@ -442,7 +598,12 @@ public sealed class BookConverter(
     public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
         var book = await Parser.ParseAsync(input, cancellationToken);
-        var voice = Synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
+        var providerId = TtsSettings.WindowsProviderId;
+        var voices = await Synthesizer.GetVoicesAsync(providerId, cancellationToken);
+        var voice = voices.FirstOrDefault(v =>
+            string.Equals(v.Gender, "Female", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(v.Culture, language, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"No female voice for language '{language}' was found in provider '{providerId}'.");
         var bookFile = output.GetSubFile($"{book.FileName}.m4b");
 
         await ConvertAsync(voice, book, bookFile, output, progress, cancellationToken);
