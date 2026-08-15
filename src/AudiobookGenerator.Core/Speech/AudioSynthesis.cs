@@ -2,11 +2,7 @@ using Microsoft.Extensions.Logging;
 
 using System.Globalization;
 using System.Media;
-using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Speech.Synthesis;
-using System.Text;
 using System.Text.Json.Serialization;
 
 namespace YewCone.AudiobookGenerator.Core;
@@ -14,8 +10,7 @@ namespace YewCone.AudiobookGenerator.Core;
 internal sealed class AudioSynthesizer(
     WindowsSpeechProvider windowsProvider,
     ITtsSettingsStore settingsStore,
-    IHttpClientFactory httpClientFactory,
-    ILoggerFactory loggerFactory) : IAudioSynthesizer
+    OpenAiCompatibleHttpClient openAiClient) : IAudioSynthesizer
 {
     public async Task<IReadOnlyList<SpeechProviderInfo>> GetProvidersAsync(CancellationToken cancellationToken)
     {
@@ -74,8 +69,7 @@ internal sealed class AudioSynthesizer(
 
         return new OpenAiCompatibleSpeechProvider(
             profile,
-            httpClientFactory,
-            loggerFactory.CreateLogger<OpenAiCompatibleSpeechProvider>());
+            openAiClient);
     }
 
     private sealed class AudioSynthesisSession(
@@ -187,11 +181,8 @@ internal sealed class WindowsSpeechProvider(ILogger<WindowsSpeechProvider> logge
 
 internal sealed class OpenAiCompatibleSpeechProvider(
     OpenAiCompatibleTtsProfile profile,
-    IHttpClientFactory httpClientFactory,
-    ILogger<OpenAiCompatibleSpeechProvider> logger) : ISpeechProvider
+    OpenAiCompatibleHttpClient openAiClient) : ISpeechProvider
 {
-    private const int MaximumAttempts = 3;
-
     public SpeechProviderInfo Info { get; } = new(
         profile.Id,
         profile.DisplayName,
@@ -213,120 +204,21 @@ internal sealed class OpenAiCompatibleSpeechProvider(
 
     public async Task<Stream> SynthesizeWavAsync(string content, SpeechVoice voice, CancellationToken cancellationToken)
     {
-        var endpoint = GetSpeechEndpoint(profile.BaseUrl);
-        Exception? lastException = null;
-
-        for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            try
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(profile.TimeoutSeconds));
-                using var request = CreateRequest(endpoint, content, voice.Id);
-                using var response = await httpClientFactory
-                    .CreateClient(nameof(OpenAiCompatibleSpeechProvider))
-                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-
-                if (IsTransient(response.StatusCode) && attempt < MaximumAttempts)
-                {
-                    logger.LogWarning(
-                        "TTS provider {ProviderId} returned {StatusCode}; retrying attempt {Attempt}.",
-                        profile.Id,
-                        (int)response.StatusCode,
-                        attempt + 1);
-                    await DelayBeforeRetryAsync(attempt, cancellationToken);
-                    continue;
-                }
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var responseBody = await response.Content.ReadAsStringAsync(timeout.Token);
-                    if (responseBody.Length > 2000)
-                    {
-                        responseBody = responseBody[..2000];
-                    }
-
-                    throw new HttpRequestException(
-                        $"TTS provider '{profile.DisplayName}' returned {(int)response.StatusCode} ({response.ReasonPhrase}). {responseBody}".Trim(),
-                        inner: null,
-                        response.StatusCode);
-                }
-
-                var output = new MemoryStream();
-                try
-                {
-                    await response.Content.CopyToAsync(output, timeout.Token);
-                    ValidateWave(output);
-                    output.Position = 0;
-                    return output;
-                }
-                catch
-                {
-                    output.Dispose();
-                    throw;
-                }
-            }
-            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                lastException = new TimeoutException(
-                    $"TTS provider '{profile.DisplayName}' did not respond within {profile.TimeoutSeconds} seconds.",
-                    ex);
-            }
-            catch (HttpRequestException ex) when (attempt < MaximumAttempts && IsTransient(ex.StatusCode))
-            {
-                lastException = ex;
-            }
-
-            if (attempt < MaximumAttempts)
-            {
-                logger.LogWarning(
-                    lastException,
-                    "TTS request to provider {ProviderId} failed; retrying attempt {Attempt}.",
-                    profile.Id,
-                    attempt + 1);
-                await DelayBeforeRetryAsync(attempt, cancellationToken);
-            }
-        }
-
-        throw new HttpRequestException(
-            $"TTS request to provider '{profile.DisplayName}' failed after {MaximumAttempts} attempts.",
-            lastException);
+        var bytes = await openAiClient.PostJsonForBytesAsync(
+            new OpenAiEndpointRequestOptions(
+                profile.Id,
+                profile.DisplayName,
+                profile.BaseUrl,
+                profile.TimeoutSeconds,
+                profile.ApiKeyEnvironmentVariable),
+            "audio/speech",
+            new SpeechRequest(profile.Model, content, voice.Id, "wav", profile.Speed),
+            cancellationToken);
+        var output = new MemoryStream(bytes, 0, bytes.Length, writable: false, publiclyVisible: true);
+        ValidateWave(output);
+        output.Position = 0;
+        return output;
     }
-
-    private HttpRequestMessage CreateRequest(Uri endpoint, string content, string voiceId)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-        {
-            Content = JsonContent.Create(new SpeechRequest(profile.Model, content, voiceId, "wav", profile.Speed))
-        };
-
-        if (!string.IsNullOrWhiteSpace(profile.ApiKeyEnvironmentVariable))
-        {
-            var apiKey = Environment.GetEnvironmentVariable(profile.ApiKeyEnvironmentVariable)
-                ?? throw new InvalidOperationException(
-                    $"TTS provider '{profile.DisplayName}' requires environment variable '{profile.ApiKeyEnvironmentVariable}'.");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        }
-
-        return request;
-    }
-
-    private static Uri GetSpeechEndpoint(string baseUrl)
-    {
-        var normalized = baseUrl.EndsWith("/", StringComparison.Ordinal) ? baseUrl : $"{baseUrl}/";
-        return new Uri(new Uri(normalized, UriKind.Absolute), "audio/speech");
-    }
-
-    private static bool IsTransient(HttpStatusCode? statusCode) =>
-        statusCode is null
-        || statusCode == HttpStatusCode.RequestTimeout
-        || statusCode == HttpStatusCode.TooManyRequests
-        || (int)statusCode >= 500;
-
-    private static Task DelayBeforeRetryAsync(int attempt, CancellationToken cancellationToken) =>
-        Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), cancellationToken);
 
     private static void ValidateWave(MemoryStream stream)
     {

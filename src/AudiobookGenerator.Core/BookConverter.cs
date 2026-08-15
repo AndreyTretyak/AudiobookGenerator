@@ -25,6 +25,10 @@ public static class AudioBookConverterDependencyInjectionExtensions
             "YewCone",
             "AudiobookGenerator",
             "tts-settings.json");
+        var visionSettingsPath = Path.Combine(
+            Path.GetDirectoryName(ttsSettingsPath)
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "vision-settings.json");
 
         return services
             .AddSingleton<IAudioConverter, FfmpegAudioConverter>()
@@ -32,18 +36,67 @@ public static class AudioBookConverterDependencyInjectionExtensions
             .AddSingleton<IEpubBookParser, VersOneEpubBookParser>()
             .AddSingleton(new TtsSettingsStoreOptions(ttsSettingsPath))
             .AddSingleton<ITtsSettingsStore, JsonTtsSettingsStore>()
+            .AddSingleton(new VisionSettingsStoreOptions(visionSettingsPath))
+            .AddSingleton<IVisionSettingsStore, JsonVisionSettingsStore>()
+            .AddSingleton<OpenAiCompatibleHttpClient>()
             .AddSingleton<WindowsSpeechProvider>()
             .AddSingleton<IAudioSynthesizer, AudioSynthesizer>()
             .AddSingleton<IAudioPreviewService, WaveAudioPreviewService>()
             .AddSingleton<ITextChunker, NaturalTextChunker>()
+            .AddSingleton<IImageNarrationRenderer, ImageNarrationRenderer>()
+            .AddSingleton<IImageNormalizer, SkiaImageNormalizer>()
+            .AddSingleton<IImageDescriptionService, ImageDescriptionService>()
+            .AddSingleton<IImageDescriptionWorkflow, ImageDescriptionWorkflow>()
+            .AddSingleton<IImageDescriptionProjectStore, ImageDescriptionProjectStore>()
             .AddHttpClient()
             .AddSingleton<BookConverter>();
     }
 }
 
-public record BookChapter(string FileName, string Name, string Content);
+public sealed record BookChapter
+{
+    private string content;
+    private readonly string[] requiredOccurrenceIds;
 
-public record BookImage(string FileName, byte[] Content);
+    public BookChapter(
+        string fileName,
+        string name,
+        string content,
+        BookImageOccurrence[]? imageOccurrences = null)
+    {
+        FileName = fileName;
+        Name = name;
+        this.content = content;
+        ImageOccurrences = imageOccurrences;
+        requiredOccurrenceIds = [.. ImageNarrationMarker
+            .ExtractOccurrenceIds(content)
+            .Order(StringComparer.Ordinal)];
+    }
+
+    public string FileName { get; init; }
+
+    public string Name { get; init; }
+
+    public string Content
+    {
+        get => content;
+        set
+        {
+            var updatedIds = ImageNarrationMarker
+                .ExtractOccurrenceIds(value)
+                .Order(StringComparer.Ordinal);
+            if (!requiredOccurrenceIds.SequenceEqual(updatedIds, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Chapter edits must preserve every [[image-ref:...]] marker.");
+            }
+
+            content = value;
+        }
+    }
+
+    public BookImageOccurrence[]? ImageOccurrences { get; init; }
+}
 
 public record Book(
     string FileName,
@@ -52,7 +105,8 @@ public record Book(
     List<string> AuthorList,
     byte[]? CoverImage,
     BookChapter[] Chapters,
-    BookImage[] Images);
+    BookImage[] Images,
+    string? Language = null);
 
 public interface IEpubBookParser
 {
@@ -61,7 +115,7 @@ public interface IEpubBookParser
 
 public interface IHtmlConverter
 {
-    Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
+    Task<HtmlTextConversionResult> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
 }
 
 public interface IAudioConverter
@@ -312,8 +366,9 @@ public class FfmpegAudioConverter : IAudioConverter
 
 public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> logger) : IHtmlConverter
 {
-    public Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
+    public Task<HtmlTextConversionResult> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // title can't be self closing tag in order for parsing to work, but epub allos it
         // TODO: it would be nice to have nicer workaround, but this may require using diffirent way of converting.
         var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
@@ -326,19 +381,26 @@ public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> 
         HtmlDocument htmlDocument = new();
         htmlDocument.LoadHtml(htmlContent);
 
+        var imageReferences = new List<HtmlImageReference>();
         var images = htmlDocument.DocumentNode.SelectNodes("//img");
         if (images != null)
         {
-            var replaceNodes = htmlDocument.DocumentNode.SelectNodes("//img")?.Select(img =>
+            for (var imageIndex = 0; imageIndex < images.Count; imageIndex++)
             {
-                var altText = img.Attributes["alt"]?.Value ?? string.Empty;
-                var fileName = img.Attributes["src"].Value.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Last();
-                return (Original: img, Replacement: HtmlTextNode.CreateNode($"book image: {altText} file name {fileName}"));
-            }) ?? [];
+                var image = images[imageIndex];
+                if (image == null)
+                {
+                    continue;
+                }
 
-            foreach (var (original, replacement) in replaceNodes)
-            {
-                _ = original.ParentNode.ReplaceChild(replacement, original);
+                var source = (HtmlEntity.DeEntitize(image.GetAttributeValue("src", string.Empty)) ?? string.Empty).Trim();
+                var altText = (HtmlEntity.DeEntitize(image.GetAttributeValue("alt", string.Empty)) ?? string.Empty).Trim();
+                var placeholder = $"[[_epub_image_{imageIndex:0000}_]]";
+                imageReferences.Add(new(
+                    placeholder,
+                    source,
+                    string.IsNullOrWhiteSpace(altText) ? null : altText));
+                _ = image.ParentNode.ReplaceChild(HtmlTextNode.CreateNode(placeholder), image);
             }
         }
 
@@ -353,7 +415,7 @@ public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> 
 
         var title = GetText(htmlDocument, "//title//text()");
         var content = GetText(htmlDocument, "//body//text()");  // if we use //body//text() then title chapter won't be anounced during narration 
-        return Task.FromResult((title, content));
+        return Task.FromResult(new HtmlTextConversionResult(title, content, [.. imageReferences]));
     }
 }
 
@@ -390,15 +452,61 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
         using var stream = fileInfo.OpenRead();
         var book = EpubReader.ReadBook(stream, options);
 
+        var images = book.Content.Images.Local.Select(ConvertImage).ToArray();
+        var imagesByPath = new Dictionary<string, BookImage>(StringComparer.OrdinalIgnoreCase);
+        foreach (var image in images)
+        {
+            if (image.SourcePath != null && !imagesByPath.TryAdd(image.SourcePath, image))
+            {
+                logger.LogWarning("Multiple EPUB images resolve to source path {SourcePath}.", image.SourcePath);
+            }
+        }
+
         var chapterMapping = CollectChapterNames(book);
 
-        var chapters = book.ReadingOrder.Select(c => new Chapter(c.FilePath, chapterMapping.GetValueOrDefault(c.FilePath, ""), c.Content));
+        var chapters = book.ReadingOrder.Select(c => new RawChapter(
+            c.FilePath,
+            chapterMapping.GetValueOrDefault(c.FilePath, ""),
+            c.Content));
 
         var convertTask = chapters
             .Where(chapters => !string.IsNullOrWhiteSpace(chapters.Content))
-            .Select(chapter => ChapterToPlainTextAsync(chapter, cancellationToken));
+            .Select(chapter => ChapterToPlainTextAsync(chapter, imagesByPath, cancellationToken));
 
         var plainTextChapters = await Task.WhenAll(convertTask).ConfigureAwait(false);
+        var altTextByImageId = plainTextChapters
+            .SelectMany(static chapter => chapter.ImageOccurrences)
+            .Where(static occurrence => occurrence.ImageId != null && !string.IsNullOrWhiteSpace(occurrence.OriginalAltText))
+            .GroupBy(static occurrence => occurrence.ImageId!, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group
+                    .Select(static occurrence => occurrence.OriginalAltText!)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+
+        images = [.. images.Select(image =>
+        {
+            var altTexts = altTextByImageId.GetValueOrDefault(image.Id) ?? [];
+            if (altTexts.Length > 1)
+            {
+                logger.LogWarning(
+                    "Image {ImagePath} has {AltTextCount} different EPUB alt texts; preserving all and using the first as approved.",
+                    image.SourcePath,
+                    altTexts.Length);
+            }
+
+            return image with
+            {
+                SourceAltTexts = altTexts,
+                ApprovedDescription = altTexts.FirstOrDefault(),
+                DescriptionOrigin = altTexts.Length == 0
+                    ? ImageDescriptionOrigin.None
+                    : ImageDescriptionOrigin.EpubAltText
+            };
+        })];
+
         return new Book(
             Path.GetFileNameWithoutExtension(fileInfo.Name),
             book.Title,
@@ -406,7 +514,8 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
             book.AuthorList,
             book.CoverImage,
             plainTextChapters.Where(chapter => !string.IsNullOrEmpty(chapter.Content)).Select(ConvertChapter).ToArray(),
-            book.Content.Images.Local.Select(ConvertImage).ToArray());
+            images,
+            book.Schema.Package.Metadata.Languages.FirstOrDefault()?.Language);
     }
 
     private Dictionary<string, string> CollectChapterNames(EpubBook book)
@@ -439,31 +548,70 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
         return mapping;
     }
 
-    private async Task<Chapter> ChapterToPlainTextAsync(Chapter chapter, CancellationToken cancellationToken)
+    private async Task<Chapter> ChapterToPlainTextAsync(
+        RawChapter chapter,
+        IReadOnlyDictionary<string, BookImage> imagesByPath,
+        CancellationToken cancellationToken)
     {
-        var (parsedTitle, content) = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
-        var fileName = Path.GetFileNameWithoutExtension(chapter.FileName);
+        var conversion = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
+        var content = conversion.Content;
+        var normalizedChapterPath = EpubImagePath.Normalize(chapter.FilePath);
+        var occurrences = new List<BookImageOccurrence>(conversion.Images.Length);
+
+        for (var imageIndex = 0; imageIndex < conversion.Images.Length; imageIndex++)
+        {
+            var reference = conversion.Images[imageIndex];
+            var resolvedPath = EpubImagePath.Resolve(chapter.FilePath, reference.Source);
+            BookImage? image = null;
+            if (resolvedPath != null && !imagesByPath.TryGetValue(resolvedPath, out image))
+            {
+                logger.LogWarning(
+                    "Chapter image source {ImageSource} resolved to {ResolvedPath}, but no matching EPUB image was found.",
+                    reference.Source,
+                    resolvedPath);
+            }
+
+            var occurrenceId = BookImageIdentity.CreateOccurrenceId(normalizedChapterPath, imageIndex);
+            occurrences.Add(new(occurrenceId, image?.Id, reference.Source, reference.AltText));
+            content = content.Replace(
+                reference.Placeholder,
+                ImageNarrationMarker.Create(occurrenceId),
+                StringComparison.Ordinal);
+        }
+
+        var fileName = Path.GetFileNameWithoutExtension(chapter.FilePath);
         var title = string.IsNullOrEmpty(chapter.Title)
-            ? string.IsNullOrEmpty(parsedTitle)
+            ? string.IsNullOrEmpty(conversion.Title)
                 ? fileName
-                : parsedTitle
+                : conversion.Title
             : chapter.Title;
 
-        return new Chapter(fileName, title, content);
+        return new Chapter(fileName, title, content, [.. occurrences]);
     }
 
     private static BookChapter ConvertChapter(Chapter chapter, int index) =>
         new BookChapter(
            $"{(index + 1):0000} {chapter.FileName}", // TODO: do we need to add index here and in images?
             chapter.Title,
-            chapter.Content);
+           chapter.Content,
+           chapter.ImageOccurrences);
 
     private static BookImage ConvertImage(EpubLocalByteContentFile imageFile, int index) =>
         new BookImage(
-            $"{(index + 1):0000} {Path.GetFileName(imageFile.FilePath)}",
-            imageFile.Content);
+           $"{(index + 1):0000} {Path.GetFileName(imageFile.FilePath)}",
+           imageFile.Content)
+        {
+           SourcePath = EpubImagePath.Normalize(imageFile.FilePath),
+           Id = BookImageIdentity.CreateSourceId(EpubImagePath.Normalize(imageFile.FilePath))
+        };
 
-    private readonly record struct Chapter(string FileName, string Title, string Content);
+    private readonly record struct RawChapter(string FilePath, string Title, string Content);
+
+    private readonly record struct Chapter(
+        string FileName,
+        string Title,
+        string Content,
+        BookImageOccurrence[] ImageOccurrences);
 }
 
 public sealed class BookConverter(
@@ -471,7 +619,12 @@ public sealed class BookConverter(
     IAudioSynthesizer synthesizer,
     IAudioPreviewService previewService,
     ITtsSettingsStore ttsSettings,
+    IVisionSettingsStore visionSettings,
+    IImageDescriptionService imageDescriptions,
+    IImageDescriptionWorkflow imageDescriptionWorkflow,
+    IImageDescriptionProjectStore imageDescriptionProjects,
     ITextChunker textChunker,
+    IImageNarrationRenderer narrationRenderer,
     IAudioConverter audioConverter,
     ILogger<BookConverter> logger)
 {
@@ -482,6 +635,16 @@ public sealed class BookConverter(
     public IAudioPreviewService Preview { get; } = previewService;
 
     public ITtsSettingsStore TtsSettingsStore { get; } = ttsSettings;
+
+    public IVisionSettingsStore VisionSettingsStore { get; } = visionSettings;
+
+    public IImageDescriptionService ImageDescriptions { get; } = imageDescriptions;
+
+    public IImageDescriptionWorkflow ImageDescriptionWorkflow { get; } = imageDescriptionWorkflow;
+
+    public IImageDescriptionProjectStore ImageDescriptionProjects { get; } = imageDescriptionProjects;
+
+    public IImageNarrationRenderer NarrationRenderer { get; } = narrationRenderer;
 
     public async Task ConvertAsync(
         SpeechVoice voice,
@@ -527,11 +690,20 @@ public sealed class BookConverter(
 
         foreach (var chapter in book.Chapters)
         {
+            var narrationContent = NarrationRenderer.Render(
+                chapter,
+                book.Images,
+                ImageNarrationFallback.ForLanguage(book.Language));
+            if (string.IsNullOrWhiteSpace(narrationContent))
+            {
+                continue;
+            }
+
             List<FileInfo> chapterWavFiles;
             progress.Report(new(chapter.Name, StageType.ConvertTextToWav, Progress.Started));
             try
             {
-                var chunks = textChunker.Split(chapter.Content, synthesisSession.MaximumInputCharacters);
+                var chunks = textChunker.Split(narrationContent, synthesisSession.MaximumInputCharacters);
                 chapterWavFiles = new List<FileInfo>(chunks.Count);
 
                 for (var chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)

@@ -125,6 +125,18 @@ internal sealed class ConversionRunner
                         cancellationToken);
                 });
 
+            if (session.SourceFile != null)
+            {
+                var sidecar = new FileInfo(converter.ImageDescriptionProjects.GetSidecarPath(outputFile));
+                var sidecarResult = await converter.ImageDescriptionProjects.SaveAsync(
+                    sidecar,
+                    session.SourceFile,
+                    book,
+                    session.SelectedVisionProfileId,
+                    cancellationToken);
+                ReportSidecarLimitations(sidecarResult);
+            }
+
             AnsiConsole.WriteLine();
             AnsiConsole.Write(new Rule($"[green]{Strings.StatusConversionComplete}[/]"));
             AnsiConsole.WriteLine();
@@ -138,6 +150,20 @@ internal sealed class ConversionRunner
         {
             AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorConversionFailed, Markup.Escape(ex.Message))}[/]");
             AnsiConsole.WriteException(ex);
+        }
+    }
+
+    private static void ReportSidecarLimitations(ImageDescriptionProjectSaveResult result)
+    {
+        if (result.SkippedImportedImageCount > 0)
+        {
+            AnsiConsole.MarkupLine(
+                $"[yellow]The sidecar excludes {result.SkippedImportedImageCount} imported image(s); their bytes remain only in this M4B session.[/]");
+        }
+        if (result.CoverSelectionNotPersisted)
+        {
+            AnsiConsole.MarkupLine(
+                "[yellow]The selected cover is an imported image and cannot be restored from the annotation-only sidecar.[/]");
         }
     }
 

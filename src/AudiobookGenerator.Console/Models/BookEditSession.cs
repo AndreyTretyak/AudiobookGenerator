@@ -12,10 +12,11 @@ internal sealed class BookEditSession
     private readonly Dictionary<string, string> _editedChapterContent = [];
     private readonly List<BookImage> _images;
 
-    public BookEditSession(Book book)
+    public BookEditSession(Book book, FileInfo? sourceFile = null)
     {
         _originalBook = book;
         _images = [.. book.Images];
+        SourceFile = sourceFile;
 
         Title = book.Title;
         Description = book.Description;
@@ -28,6 +29,10 @@ internal sealed class BookEditSession
     /// The original file name (without extension).
     /// </summary>
     public string FileName { get; }
+
+    public FileInfo? SourceFile { get; }
+
+    public string? Language => _originalBook.Language;
 
     /// <summary>
     /// Editable book title.
@@ -54,6 +59,8 @@ internal sealed class BookEditSession
     /// </summary>
     public SpeechVoice? SelectedVoice { get; set; }
 
+    public string? SelectedVisionProfileId { get; set; }
+
     /// <summary>
     /// Gets all chapters with their current content (edited or original).
     /// </summary>
@@ -78,6 +85,12 @@ internal sealed class BookEditSession
     /// </summary>
     public void UpdateChapterContent(string fileName, string newContent)
     {
+        var currentContent = Chapters.First(chapter => chapter.FileName == fileName).Content;
+        if (!ImageNarrationMarker.HasSameOccurrences(currentContent, newContent))
+        {
+            throw new InvalidOperationException("Chapter edits must preserve every [[image-ref:...]] marker.");
+        }
+
         _editedChapterContent[fileName] = newContent;
     }
 
@@ -102,8 +115,29 @@ internal sealed class BookEditSession
     /// </summary>
     public void AddImage(BookImage image)
     {
+        if (_images.Any(existing => string.Equals(existing.Id, image.Id, StringComparison.Ordinal)))
+        {
+            image = image with { Id = $"added-{Guid.NewGuid():N}" };
+        }
+
         _images.Add(image);
     }
+
+    public void UpdateImage(BookImage image)
+    {
+        var index = _images.FindIndex(existing => string.Equals(existing.Id, image.Id, StringComparison.Ordinal));
+        if (index < 0)
+        {
+            throw new InvalidOperationException($"Image '{image.Id}' is not part of this book.");
+        }
+
+        _images[index] = image;
+    }
+
+    public int GetReferenceCount(BookImage image) =>
+        Chapters.Sum(chapter =>
+            (chapter.ImageOccurrences ?? []).Count(occurrence =>
+                string.Equals(occurrence.ImageId, image.Id, StringComparison.Ordinal)));
 
     /// <summary>
     /// Checks if an image is the current cover.
@@ -120,7 +154,7 @@ internal sealed class BookEditSession
         || Description != _originalBook.Description
         || !Authors.SequenceEqual(_originalBook.AuthorList)
         || !ReferenceEquals(CoverImage, _originalBook.CoverImage)
-        || _images.Count != _originalBook.Images.Length;
+        || !_images.SequenceEqual(_originalBook.Images);
 
     /// <summary>
     /// Builds the final <see cref="Book"/> record with all edits applied.
@@ -132,5 +166,6 @@ internal sealed class BookEditSession
         Authors,
         CoverImage,
         [.. Chapters],
-        [.. _images]);
+        [.. _images],
+        _originalBook.Language);
 }

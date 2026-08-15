@@ -69,6 +69,7 @@ internal class Program
             "convert" => await RunDirectConvertAsync(args, converter, cancellationToken),
             "voices" => await RunListVoicesAsync(args, converter, cancellationToken),
             "tts" => await RunTtsSettingsAsync(converter, cancellationToken),
+            "vision" => await RunVisionSettingsAsync(converter, cancellationToken),
             "info" => await RunInfoAsync(args, converter, cancellationToken),
             "help" or "--help" or "-h" or "/?" => ShowHelp(),
             _ when File.Exists(args[0].Trim('\"')) => await RunInteractiveAsync(["open", args[0]], converter, cancellationToken),
@@ -112,6 +113,11 @@ internal class Program
             "[blue]tts[/]",
             Strings.HelpTtsDescription,
             "[dim]audiobook tts[/]");
+
+        _ = table.AddRow(
+            "[blue]vision[/]",
+            "Configure image-description models",
+            "[dim]audiobook vision[/]");
 
         _ = table.AddRow(
             "[blue]info[/] [dim]<file>[/]",
@@ -158,12 +164,12 @@ internal class Program
         AnsiConsole.Write(new Rule($"[bold green]{Strings.HeaderAudiobookGenerator}[/]"));
         AnsiConsole.WriteLine();
 
-        var book = await AnsiConsole.Status()
+        var loaded = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
             .StartAsync(Strings.StatusLoadingBook, async _ =>
-                await converter.Parser.ParseAsync(new FileInfo(bookPath), cancellationToken));
-
-        var session = new BookEditSession(book);
+                await LoadSessionAsync(new FileInfo(bookPath), converter, cancellationToken));
+        DisplayProjectWarnings(loaded);
+        var session = loaded.Session;
 
         // Create menu components
         var chapterEditor = new ChapterEditor();
@@ -231,12 +237,13 @@ internal class Program
         AnsiConsole.WriteLine();
 
         // Load book
-        var book = await AnsiConsole.Status()
+        var loaded = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
             .StartAsync(Strings.StatusLoadingBook, async _ =>
-                await converter.Parser.ParseAsync(new FileInfo(bookPath), cancellationToken));
-
-        var session = new BookEditSession(book);
+                await LoadSessionAsync(new FileInfo(bookPath), converter, cancellationToken));
+        DisplayProjectWarnings(loaded);
+        var session = loaded.Session;
+        var book = session.BuildBook();
 
         // Find voice
         providerId ??= await converter.Synthesizer.GetDefaultProviderIdAsync(cancellationToken);
@@ -400,6 +407,13 @@ internal class Program
         return 0;
     }
 
+    private static async Task<int> RunVisionSettingsAsync(BookConverter converter, CancellationToken cancellationToken)
+    {
+        var menu = new VisionSettingsMenu(converter.VisionSettingsStore, converter.ImageDescriptions);
+        await menu.RunAsync(testImage: null, cancellationToken);
+        return 0;
+    }
+
     private static async Task<int> RunInfoAsync(string[] args, BookConverter converter, CancellationToken cancellationToken)
     {
         if (args.Length < 2)
@@ -472,7 +486,7 @@ internal class Program
                     {
                         _ when string.IsNullOrWhiteSpace(trimmed) => ValidationResult.Error(Strings.ErrorPathEmpty),
                         _ when !File.Exists(trimmed) => ValidationResult.Error(Strings.ErrorFileDoesNotExist),
-                        _ when !trimmed.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) => ValidationResult.Error(Strings.ErrorFileMustBeEpub),
+                        _ when !IsSupportedInput(trimmed) => ValidationResult.Error("File must be an EPUB or .audiobook.json sidecar."),
                         _ => ValidationResult.Success()
                     };
                 }),
@@ -480,4 +494,70 @@ internal class Program
 
         return path?.Trim('\"');
     }
+
+    private static bool IsSupportedInput(string path) =>
+        path.EndsWith(".epub", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".audiobook.json", StringComparison.OrdinalIgnoreCase);
+
+    private static async Task<LoadedBookSession> LoadSessionAsync(
+        FileInfo input,
+        BookConverter converter,
+        CancellationToken cancellationToken)
+    {
+        if (!input.Name.EndsWith(".audiobook.json", StringComparison.OrdinalIgnoreCase))
+        {
+            var book = await converter.Parser.ParseAsync(input, cancellationToken);
+            return new(new BookEditSession(book, input), true, [], 0);
+        }
+
+        var project = await converter.ImageDescriptionProjects.LoadAsync(input, cancellationToken);
+        var source = converter.ImageDescriptionProjects.ResolveSourceEpub(input, project);
+        if (!source.Exists)
+        {
+            throw new FileNotFoundException(
+                $"The source EPUB recorded by the sidecar was not found: {source.FullName}",
+                source.FullName);
+        }
+
+        var parsed = await converter.Parser.ParseAsync(source, cancellationToken);
+        var applied = await converter.ImageDescriptionProjects.ApplyAsync(
+            project,
+            source,
+            parsed,
+            cancellationToken);
+        var session = new BookEditSession(applied.Book, source)
+        {
+            SelectedVisionProfileId = project.Generation?.ProfileId
+        };
+        return new(
+            session,
+            applied.SourceFingerprintMatches,
+            applied.UnmatchedImageIds,
+            project.SkippedImportedImageCount);
+    }
+
+    private static void DisplayProjectWarnings(LoadedBookSession loaded)
+    {
+        if (!loaded.SourceFingerprintMatches)
+        {
+            AnsiConsole.MarkupLine(
+                "[yellow]The source EPUB differs from the sidecar fingerprint; only exact image hashes were restored.[/]");
+        }
+        if (loaded.UnmatchedImageIds.Count > 0)
+        {
+            AnsiConsole.MarkupLine(
+                $"[yellow]{loaded.UnmatchedImageIds.Count} sidecar image annotation(s) could not be matched.[/]");
+        }
+        if (loaded.SkippedImportedImageCount > 0)
+        {
+            AnsiConsole.MarkupLine(
+                $"[yellow]This annotation-only sidecar did not persist {loaded.SkippedImportedImageCount} imported image(s).[/]");
+        }
+    }
+
+    private sealed record LoadedBookSession(
+        BookEditSession Session,
+        bool SourceFingerprintMatches,
+        IReadOnlyList<string> UnmatchedImageIds,
+        int SkippedImportedImageCount);
 }

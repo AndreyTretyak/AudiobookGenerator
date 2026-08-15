@@ -63,7 +63,7 @@ internal sealed class InteractiveMenu(
             }
             else if (choice == Strings.MenuManageImages)
             {
-                await imageManager.RunAsync(session, cancellationToken);
+                await imageManager.RunAsync(session, converter, cancellationToken);
             }
             else if (choice == Strings.MenuEditMetadata)
             {
@@ -96,7 +96,7 @@ internal sealed class InteractiveMenu(
             }
             else if (choice == Strings.MenuPreviewAudio)
             {
-                await audioPreviewer.RunAsync(session, converter.Preview, cancellationToken);
+                await audioPreviewer.RunAsync(session, converter, cancellationToken);
             }
             else if (choice == Strings.MenuGenerateAudiobook)
             {

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace YewCone.AudiobookGenerator.Core;
@@ -7,35 +6,16 @@ namespace YewCone.AudiobookGenerator.Core;
 internal sealed partial class JsonTtsSettingsStore(TtsSettingsStoreOptions options) : ITtsSettingsStore
 {
     private const string EnvironmentPrefix = "AUDIOBOOKGENERATOR_TTS_";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true
-    };
 
     public string SettingsPath => options.SettingsPath;
 
     public async Task<TtsSettings> LoadAsync(CancellationToken cancellationToken)
     {
-        TtsSettings settings;
-
-        if (!File.Exists(SettingsPath))
-        {
-            settings = new TtsSettings();
-        }
-        else
-        {
-            try
-            {
-                await using var stream = File.OpenRead(SettingsPath);
-                settings = await JsonSerializer.DeserializeAsync<TtsSettings>(stream, SerializerOptions, cancellationToken)
-                    ?? throw new InvalidDataException($"TTS settings file '{SettingsPath}' is empty.");
-            }
-            catch (JsonException ex)
-            {
-                throw new InvalidDataException($"TTS settings file '{SettingsPath}' contains invalid JSON.", ex);
-            }
-        }
-
+        var settings = await AtomicJsonSettingsFile.LoadAsync(
+            SettingsPath,
+            "TTS",
+            static () => new TtsSettings(),
+            cancellationToken);
         ApplyEnvironmentOverrides(settings);
         Validate(settings);
         return settings;
@@ -45,34 +25,7 @@ internal sealed partial class JsonTtsSettingsStore(TtsSettingsStoreOptions optio
     {
         Validate(settings);
 
-        var directory = Path.GetDirectoryName(SettingsPath)
-            ?? throw new InvalidOperationException($"Unable to determine the directory for '{SettingsPath}'.");
-        Directory.CreateDirectory(directory);
-
-        var temporaryPath = $"{SettingsPath}.{Guid.NewGuid():N}.tmp";
-        try
-        {
-            await using (var stream = new FileStream(
-                temporaryPath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                FileOptions.Asynchronous | FileOptions.WriteThrough))
-            {
-                await JsonSerializer.SerializeAsync(stream, settings, SerializerOptions, cancellationToken);
-                await stream.FlushAsync(cancellationToken);
-            }
-
-            File.Move(temporaryPath, SettingsPath, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
-        }
+        await AtomicJsonSettingsFile.SaveAsync(SettingsPath, settings, cancellationToken);
     }
 
     private static void ApplyEnvironmentOverrides(TtsSettings settings)
@@ -188,35 +141,17 @@ internal sealed partial class JsonTtsSettingsStore(TtsSettingsStoreOptions optio
         {
             profile.Voices ??= [];
 
-            if (string.IsNullOrWhiteSpace(profile.Id) || !ProfileIdRegex().IsMatch(profile.Id))
-            {
-                throw new InvalidDataException($"TTS profile ID '{profile.Id}' is invalid. Use letters, digits, periods, underscores, or hyphens.");
-            }
+            _ = OpenAiEndpointValidation.Validate(
+                "TTS",
+                profile.Id,
+                profile.DisplayName,
+                profile.BaseUrl,
+                profile.Model,
+                profile.TimeoutSeconds);
 
             if (!providerIds.Add(profile.Id))
             {
                 throw new InvalidDataException($"TTS provider ID '{profile.Id}' is duplicated.");
-            }
-
-            if (string.IsNullOrWhiteSpace(profile.DisplayName))
-            {
-                throw new InvalidDataException($"TTS profile '{profile.Id}' requires a display name.");
-            }
-
-            if (!Uri.TryCreate(profile.BaseUrl, UriKind.Absolute, out var baseUri)
-                || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
-            {
-                throw new InvalidDataException($"TTS profile '{profile.Id}' has an invalid HTTP(S) base URL.");
-            }
-
-            if (baseUri.Scheme == Uri.UriSchemeHttp && !baseUri.IsLoopback)
-            {
-                throw new InvalidDataException($"TTS profile '{profile.Id}' must use HTTPS unless its endpoint is on this computer.");
-            }
-
-            if (string.IsNullOrWhiteSpace(profile.Model))
-            {
-                throw new InvalidDataException($"TTS profile '{profile.Id}' requires a model.");
             }
 
             if (profile.Voices.Count == 0)
@@ -253,10 +188,6 @@ internal sealed partial class JsonTtsSettingsStore(TtsSettingsStoreOptions optio
                 throw new InvalidDataException($"TTS profile '{profile.Id}' maximum input characters must be between 100 and 100000.");
             }
 
-            if (profile.TimeoutSeconds is < 1 or > 3600)
-            {
-                throw new InvalidDataException($"TTS profile '{profile.Id}' timeout must be between 1 and 3600 seconds.");
-            }
         }
 
         if (!providerIds.Contains(settings.DefaultProviderId))
@@ -268,6 +199,4 @@ internal sealed partial class JsonTtsSettingsStore(TtsSettingsStoreOptions optio
     [GeneratedRegex("[^A-Z0-9]+")]
     private static partial Regex EnvironmentNameRegex();
 
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]*$")]
-    private static partial Regex ProfileIdRegex();
 }

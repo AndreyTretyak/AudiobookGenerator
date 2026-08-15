@@ -15,6 +15,8 @@ public partial class MainWindow : Window
     private readonly ITtsSettingsStore ttsSettings;
     private readonly IAudioSynthesizer synthesizer;
     private readonly IAudioPreviewService preview;
+    private readonly IVisionSettingsStore visionSettings;
+    private readonly IImageDescriptionService imageDescriptions;
 
     public MainWindow(
         BookConverter converter,
@@ -29,19 +31,23 @@ public partial class MainWindow : Window
         ttsSettings = ttsSettingsStore;
         synthesizer = audioSynthesizer;
         preview = previewService;
+        visionSettings = converter.VisionSettingsStore;
+        imageDescriptions = converter.ImageDescriptions;
         InitializeComponent();
         Loaded += async (_, _) => await viewModel.InitializeAsync();
     }
 
     private void HandleDragOver(object sender, DragEventArgs e)
     {
-        e.Effects = IsDragSupported(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = viewModel.CanChangeBook && IsDragSupported(e, out _)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
         e.Handled = true;
     }
 
     private async void HandleDrop(object sender, DragEventArgs e)
     {
-        if (IsDragSupported(e, out var file))
+        if (viewModel.CanChangeBook && IsDragSupported(e, out var file))
         {
             await viewModel.OpenBookAsync(file);
         }
@@ -57,12 +63,36 @@ public partial class MainWindow : Window
         await viewModel.InitializeAsync();
     }
 
+    private async void HandleVisionSettingsClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new VisionSettingsWindow(
+            visionSettings,
+            imageDescriptions,
+            viewModel.SelectedImage)
+        {
+            Owner = this
+        };
+        _ = dialog.ShowDialog();
+        try
+        {
+            await viewModel.RefreshVisionProfilesAsync();
+        }
+        catch (Exception ex)
+        {
+            _ = MessageBox.Show(
+                ex.Message,
+                "Unable to refresh vision profiles",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private static bool IsDragSupported(DragEventArgs e, [NotNullWhen(true)] out FileInfo? file)
     {
         if (e.Data.GetDataPresent(DataFormats.FileDrop)
             && e.Data.GetData(DataFormats.FileDrop) is string[] files
             && files is [var filePath, ..]
-            && AudiobookGeneratorViewModel.IsEbookExtensionSupported(filePath))
+            && AudiobookGeneratorViewModel.IsBookInputSupported(filePath))
         {
             file = new FileInfo(filePath);
             return true;

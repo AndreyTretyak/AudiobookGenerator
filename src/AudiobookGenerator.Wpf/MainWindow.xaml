@@ -173,35 +173,123 @@
                                     AllowDrop="True"
                                     PreviewDragOver="HandleDragOver"
                                     Drop="HandleDrop"
+                                    IsEnabled="{Binding CanEditBook}"
                                     Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
                                     TextWrapping="Wrap" />
                         </ScrollViewer>
                     </Grid>
                 </TabItem>
                 <TabItem Header="{Binding ImagesSectionHeader, Mode=OneWay}">
-                    <DockPanel Margin="3">
-                        <DockPanel DockPanel.Dock="Top">
-                            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
-                            <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
-                                <TextBlock>
-                                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
-                                    <Run Text="{x:Static local:Resources.AddImageLable}"/>
-                                </TextBlock>
-                            </Button>
-                            <Button Margin="0 0 5 0"  DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
-                                <TextBlock>
-                                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
-                                    <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
-                                </TextBlock>
-                            </Button>
-                            <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                    <Grid Margin="3">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="0 0 0 6">
+                            <TextBlock Margin="0 0 4 0" VerticalAlignment="Center" Text="{x:Static local:Resources.VisionModelLabel}"/>
+                            <ComboBox Width="180"
+                                      Margin="0 0 5 0"
+                                      DisplayMemberPath="DisplayName"
+                                      ItemsSource="{Binding VisionProfiles}"
+                                      SelectedItem="{Binding SelectedVisionProfile}"
+                                      IsEnabled="{Binding CanConfigureVision}"/>
+                            <Button Margin="0 0 5 0"
+                                    Click="HandleVisionSettingsClick"
+                                    IsEnabled="{Binding CanConfigureVision}"
+                                    Content="{x:Static local:Resources.VisionSettingsLabel}"/>
+                            <Button Margin="0 0 5 0"
+                                    Command="{Binding GenerateMissingImageDescriptionsCommand}"
+                                    Content="{x:Static local:Resources.GenerateMissingDescriptionsLabel}"/>
+                            <Button Margin="0 0 5 0"
+                                    Command="{Binding CancelImageDescriptionGenerationCommand}"
+                                    Visibility="{Binding IsGeneratingImageDescriptions, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Content="Cancel"/>
+                            <Button Command="{Binding SaveDescriptionProjectCommand}"
+                                    Content="{x:Static local:Resources.SaveProjectAsLabel}"/>
+                        </WrapPanel>
+
+                        <DockPanel Grid.Row="1" Grid.Column="0">
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0 6 0 0">
+                                <TextBlock Text="Cover image"/>
+                                <ComboBox IsEnabled="{Binding CanEditBook}"
+                                          ItemsSource="{Binding Book.Images}"
+                                          SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                                <StackPanel Margin="0 5 0 0" Orientation="Horizontal">
+                                    <Button Margin="0 0 5 0" Command="{Binding AddImageCommand}" Content="{x:Static local:Resources.AddImageLable}"/>
+                                    <Button Command="{Binding SaveImageAsCommand}" Content="{x:Static local:Resources.SaveImageAsLable}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Book.Images}"
+                                     SelectedItem="{Binding SelectedImage, Mode=TwoWay}"/>
                         </DockPanel>
-                        <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" Stretch="Uniform" />
-                    </DockPanel>
+
+                        <ScrollViewer Grid.Row="1" Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <Image Height="180"
+                                       Source="{Binding SelectedImage.Content}"
+                                       Stretch="Uniform"/>
+                                <TextBlock Margin="0 5 0 0"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding SelectedImage.FileName}"/>
+                                <TextBlock Text="{Binding SelectedImageDescriptionStatus}"/>
+                                <TextBlock Margin="0 0 0 6">
+                                    <Run Text="Chapter references: "/>
+                                    <Run Text="{Binding SelectedImageReferenceCount, Mode=OneWay}"/>
+                                </TextBlock>
+
+                                <TextBlock FontWeight="SemiBold" Text="{x:Static local:Resources.ApprovedNarrationLabel}"/>
+                                <TextBox MinHeight="65"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         Text="{Binding ApprovedImageDescriptionDraft, UpdateSourceTrigger=PropertyChanged}"/>
+                                <WrapPanel Margin="0 5 0 8">
+                                    <Button Margin="0 0 5 0"
+                                            Command="{Binding SaveApprovedImageDescriptionCommand}"
+                                            Content="Save description"/>
+                                    <Button Margin="0 0 5 0"
+                                            Command="{Binding GenerateSelectedImageDescriptionCommand}"
+                                            Content="Generate / regenerate"/>
+                                    <Button Margin="0 0 5 0"
+                                            Command="{Binding ToggleDecorativeImageCommand}"
+                                            Content="Toggle decorative"/>
+                                    <Button Command="{Binding RestoreImageAltTextCommand}"
+                                            Content="Restore EPUB alt"/>
+                                </WrapPanel>
+
+                                <StackPanel Visibility="{Binding HasCandidateImageDescription, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock FontWeight="SemiBold" Text="{x:Static local:Resources.GeneratedCandidateLabel}"/>
+                                    <TextBox MinHeight="65"
+                                             TextWrapping="Wrap"
+                                             Text="{Binding CandidateImageDescriptionDraft, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <WrapPanel Margin="0 5 0 0">
+                                        <Button Margin="0 0 5 0"
+                                                Command="{Binding ApproveImageDescriptionCommand}"
+                                                Content="Approve"/>
+                                        <Button Command="{Binding RejectImageDescriptionCommand}"
+                                                Content="Reject"/>
+                                    </WrapPanel>
+                                </StackPanel>
+
+                                <TextBlock Margin="0 8 0 0"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding ImageDescriptionProgress}"/>
+                                <TextBlock Margin="0 4 0 0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="{x:Static local:Resources.ImagePrivacyNotice}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
                 </TabItem>
                 <TabItem Header="{x:Static local:Resources.DetailsSectionHeader}" >
                     <DataGrid 
                     Margin="3"
+                    IsEnabled="{Binding CanEditBook}"
                     ItemsSource="{Binding Book.Properties, Mode=OneWay}"
                     AutoGenerateColumns="False">
                         <DataGrid.Columns>
