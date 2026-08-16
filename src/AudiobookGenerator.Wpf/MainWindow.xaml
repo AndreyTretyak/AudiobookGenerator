@@ -149,33 +149,44 @@
                     ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
             </DockPanel>
             <TabControl
+                x:Name="MainTabs"
                 Margin="0 5"
                 DockPanel.Dock="Top">
                 <TabItem Header="{Binding TextContentSectionHeader, Mode=OneWay}" >
                     <Grid Margin="3">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="180" MinWidth="100"/>
+                            <ColumnDefinition Width="5"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <ListBox
+                            x:Name="ChapterList"
                             Grid.Column="0"
+                            AutomationProperties.AutomationId="ChapterList"
                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                             ScrollViewer.VerticalScrollBarVisibility="Auto" 
                             ItemsSource="{Binding Book.Chapters}"
                             SelectedItem="{Binding Book.SelectedChapter}"/>
-                        <GridSplitter Grid.Row="1" Width="5" VerticalAlignment="Stretch" />
-                            <ScrollViewer
-                                Grid.Column="2"
-                                VerticalScrollBarVisibility="Auto"
-                                HorizontalScrollBarVisibility="Disabled">
-                                <TextBox Grid.Column="2"
-                                    AllowDrop="True"
-                                    PreviewDragOver="HandleDragOver"
-                                    Drop="HandleDrop"
-                                    IsEnabled="{Binding CanEditBook}"
-                                    Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
-                                    TextWrapping="Wrap" />
+                        <GridSplitter
+                            x:Name="ChapterColumnSplitter"
+                            Grid.Column="1"
+                            AutomationProperties.AutomationId="ChapterColumnSplitter"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch"
+                            ResizeBehavior="PreviousAndNext"
+                            ResizeDirection="Columns"
+                            Cursor="SizeWE"/>
+                        <ScrollViewer
+                            Grid.Column="2"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled">
+                            <TextBox
+                                AllowDrop="True"
+                                PreviewDragOver="HandleDragOver"
+                                Drop="HandleDrop"
+                                IsEnabled="{Binding CanEditBook}"
+                                Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
+                                TextWrapping="Wrap" />
                         </ScrollViewer>
                     </Grid>
                 </TabItem>
@@ -230,8 +241,9 @@
 
                         <ScrollViewer Grid.Row="1" Grid.Column="2" VerticalScrollBarVisibility="Auto">
                             <StackPanel>
-                                <Image Height="180"
+                                <Image x:Name="SelectedImagePreview"
                                        Source="{Binding SelectedImage.Content}"
+                                       HorizontalAlignment="Stretch"
                                        Stretch="Uniform"/>
                                 <TextBlock Margin="0 5 0 0"
                                            FontWeight="SemiBold"
