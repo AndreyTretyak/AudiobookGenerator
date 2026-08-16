@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace YewCone.AudiobookGenerator.Core;
 
@@ -23,6 +24,7 @@ internal sealed class OpenAiCompatibleHttpClient(
         OpenAiEndpointRequestOptions options,
         string relativePath,
         T payload,
+        JsonTypeInfo<T> payloadTypeInfo,
         CancellationToken cancellationToken,
         bool includeErrorBody = true,
         int maximumResponseBytes = 256 * 1024 * 1024)
@@ -38,7 +40,7 @@ internal sealed class OpenAiCompatibleHttpClient(
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
-                using var request = CreateRequest(options, endpoint, payload);
+                using var request = CreateRequest(options, endpoint, payload, payloadTypeInfo);
                 using var response = await httpClientFactory
                     .CreateClient(nameof(OpenAiCompatibleHttpClient))
                     .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
@@ -129,11 +131,12 @@ internal sealed class OpenAiCompatibleHttpClient(
     private static HttpRequestMessage CreateRequest<T>(
         OpenAiEndpointRequestOptions options,
         Uri endpoint,
-        T payload)
+        T payload,
+        JsonTypeInfo<T> payloadTypeInfo)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
-            Content = JsonContent.Create(payload)
+            Content = JsonContent.Create(payload, payloadTypeInfo)
         };
 
         if (!string.IsNullOrWhiteSpace(options.ApiKeyEnvironmentVariable))

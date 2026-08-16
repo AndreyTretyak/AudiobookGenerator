@@ -16,11 +16,12 @@ internal sealed class ConversionRunner
     /// <summary>
     /// Runs the conversion workflow.
     /// </summary>
-    public async Task RunAsync(
+    public async Task<bool> RunAsync(
         BookEditSession session,
         BookConverter converter,
         CancellationToken cancellationToken,
-        DirectoryInfo? requestedOutputDirectory = null)
+        DirectoryInfo? requestedOutputDirectory = null,
+        bool assumeYes = false)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderGenerateAudiobook}[/]").LeftJustified());
@@ -29,7 +30,7 @@ internal sealed class ConversionRunner
         if (session.SelectedVoice == null)
         {
             AnsiConsole.MarkupLine($"[red]{Strings.ErrorNoVoiceSelected}[/]");
-            return;
+            return false;
         }
 
         DirectoryInfo outputDir;
@@ -56,7 +57,7 @@ internal sealed class ConversionRunner
         var outputFile = new FileInfo(Path.Combine(outputDir.FullName, $"{session.FileName}.m4b"));
 
         // Check if file exists
-        if (outputFile.Exists)
+        if (outputFile.Exists && !assumeYes)
         {
             var overwrite = await AnsiConsole.PromptAsync(
                 new ConfirmationPrompt(string.Format(Strings.PromptConfirmOverwrite, outputFile.Name)),
@@ -64,7 +65,7 @@ internal sealed class ConversionRunner
 
             if (!overwrite)
             {
-                return;
+                return false;
             }
         }
 
@@ -85,13 +86,13 @@ internal sealed class ConversionRunner
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
 
-        var confirm = await AnsiConsole.PromptAsync(
+        var confirm = assumeYes || await AnsiConsole.PromptAsync(
             new ConfirmationPrompt(Strings.PromptStartConversion),
             cancellationToken);
 
         if (!confirm)
         {
-            return;
+            return false;
         }
 
         AnsiConsole.WriteLine();
@@ -141,15 +142,18 @@ internal sealed class ConversionRunner
             AnsiConsole.Write(new Rule($"[green]{Strings.StatusConversionComplete}[/]"));
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine($"[green]{Strings.StatusAudiobookSaved}[/] {Markup.Escape(outputFile.FullName)}");
+            return true;
         }
         catch (OperationCanceledException)
         {
             AnsiConsole.MarkupLine($"[yellow]{Strings.StatusConversionCancelled}[/]");
+            return false;
         }
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorConversionFailed, Markup.Escape(ex.Message))}[/]");
-            AnsiConsole.WriteException(ex);
+            ExceptionDisplay.Write(ex);
+            return false;
         }
     }
 

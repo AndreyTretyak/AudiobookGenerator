@@ -15,6 +15,7 @@ internal sealed partial class JsonTtsSettingsStore(TtsSettingsStoreOptions optio
             SettingsPath,
             "TTS",
             static () => new TtsSettings(),
+            AudiobookFileJsonContext.Default.TtsSettings,
             cancellationToken);
         ApplyEnvironmentOverrides(settings);
         Validate(settings);
@@ -25,7 +26,11 @@ internal sealed partial class JsonTtsSettingsStore(TtsSettingsStoreOptions optio
     {
         Validate(settings);
 
-        await AtomicJsonSettingsFile.SaveAsync(SettingsPath, settings, cancellationToken);
+        await AtomicJsonSettingsFile.SaveAsync(
+            SettingsPath,
+            settings,
+            AudiobookFileJsonContext.Default.TtsSettings,
+            cancellationToken);
     }
 
     private static void ApplyEnvironmentOverrides(TtsSettings settings)

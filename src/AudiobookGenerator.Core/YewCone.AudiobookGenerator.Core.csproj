@@ -1,20 +1,34 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>$(CurrentTargetFramework)</TargetFramework>
+    <TargetFramework>$(CoreTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <PropertyGroup Label="PlatformSymbols">
+    <DefineConstants Condition="'$(TargetFramework)' == '$(PortableTargetFramework)'">$(DefineConstants);AUDIOBOOKGENERATOR_PORTABLE</DefineConstants>
+    <DefineConstants Condition="'$(TargetFramework)' != '$(PortableTargetFramework)'">$(DefineConstants);AUDIOBOOKGENERATOR_WINDOWS_CORE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Label="PortableAot" Condition="'$(TargetFramework)' == '$(PortableTargetFramework)'">
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+  <PropertyGroup Label="SkiaNativeAssets">
+    <SkiaNativeAssetsPackage Condition="'$(TargetFramework)' != '$(PortableTargetFramework)'">SkiaSharp.NativeAssets.Win32</SkiaNativeAssetsPackage>
+    <SkiaNativeAssetsPackage Condition="'$(TargetFramework)' == '$(PortableTargetFramework)' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '^win-'))">SkiaSharp.NativeAssets.Win32</SkiaNativeAssetsPackage>
+    <SkiaNativeAssetsPackage Condition="'$(TargetFramework)' == '$(PortableTargetFramework)' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '^linux-'))">SkiaSharp.NativeAssets.Linux.NoDependencies</SkiaNativeAssetsPackage>
+    <SkiaNativeAssetsPackage Condition="'$(TargetFramework)' == '$(PortableTargetFramework)' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '^osx-'))">SkiaSharp.NativeAssets.macOS</SkiaNativeAssetsPackage>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="SkiaSharp" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Win32" />
+    <PackageReference Include="$(SkiaNativeAssetsPackage)" Condition="'$(SkiaNativeAssetsPackage)' != ''" />
     <PackageReference Include="Svg.Skia" />
-    <PackageReference Include="System.Speech"/>
-    <PackageReference Include="System.Windows.Extensions" />
-    <PackageReference Include="VersOne.Epub"/>
-    <PackageReference Include="FFMpegCore"/>
-    <PackageReference Include="TagLibSharp"/>
-    <PackageReference Include="HtmlAgilityPack"/>
+    <PackageReference Include="System.Speech" Condition="'$(TargetFramework)' != '$(PortableTargetFramework)'" />
+    <PackageReference Include="System.Windows.Extensions" Condition="'$(TargetFramework)' != '$(PortableTargetFramework)'" />
+    <PackageReference Include="VersOne.Epub" />
+    <PackageReference Include="HtmlAgilityPack" />
   </ItemGroup>
 </Project>

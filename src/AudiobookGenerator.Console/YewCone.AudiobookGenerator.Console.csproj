@@ -1,17 +1,33 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>$(CurrentTargetFramework)</TargetFramework>
+    <TargetFramework>$(ConsoleTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <PropertyGroup Label="Publish">
+  <PropertyGroup Label="PlatformSymbols">
+    <DefineConstants Condition="'$(TargetFramework)' == '$(PortableTargetFramework)'">$(DefineConstants);AUDIOBOOKGENERATOR_PORTABLE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Label="Publish" Condition="'$(PortableAot)' != 'true'">
     <IsPublishable>true</IsPublishable>
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <ArtifactsPivots>$(RuntimeIdentifier)</ArtifactsPivots>
     <ArtifactsPivots Condition="$(SelfContained)">$(ArtifactsPivots)-selfcontained</ArtifactsPivots>
+  </PropertyGroup>
+  <PropertyGroup Label="PortableAot" Condition="'$(PortableAot)' == 'true'">
+    <IsPublishable>true</IsPublishable>
+    <PublishAot>true</PublishAot>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <ArtifactsPivots>portable-aot</ArtifactsPivots>
+    <ArtifactsPivots Condition="'$(RuntimeIdentifier)' != ''">$(ArtifactsPivots)-$(RuntimeIdentifier)</ArtifactsPivots>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AudiobookGenerator.Core\YewCone.AudiobookGenerator.Core.csproj" />

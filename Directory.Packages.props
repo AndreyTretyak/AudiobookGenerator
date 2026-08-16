@@ -14,13 +14,13 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="Spectre.Console" Version="0.50.0" />
     <PackageVersion Include="SkiaSharp" Version="4.151.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.macOS" Version="4.151.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Win32" Version="4.151.1" />
     <PackageVersion Include="Svg.Skia" Version="5.2.1" />
     <PackageVersion Include="System.Speech" Version="10.0.0-preview.5.25277.114" />
     <PackageVersion Include="System.Windows.Extensions" Version="10.0.0-preview.5.25277.114" />
     <PackageVersion Include="VersOne.Epub" Version="3.3.4" />
-    <PackageVersion Include="FFMpegCore" Version="5.2.0" />
-    <PackageVersion Include="TagLibSharp" Version="2.3.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>

@@ -1,30 +1,61 @@
-using Microsoft.Extensions.Logging;
-
-using System.Globalization;
-using System.Media;
-using System.Speech.Synthesis;
-using System.Text.Json.Serialization;
-
 namespace YewCone.AudiobookGenerator.Core;
 
-internal sealed class AudioSynthesizer(
-    WindowsSpeechProvider windowsProvider,
-    ITtsSettingsStore settingsStore,
-    OpenAiCompatibleHttpClient openAiClient) : IAudioSynthesizer
+internal sealed class AudioSynthesizer : IAudioSynthesizer
 {
+    private readonly IReadOnlyList<ISpeechProvider> builtInProviders;
+    private readonly IReadOnlyDictionary<string, ISpeechProvider> builtInProvidersById;
+    private readonly ITtsSettingsStore settingsStore;
+    private readonly OpenAiCompatibleHttpClient openAiClient;
+
+    public AudioSynthesizer(
+        IEnumerable<ISpeechProvider> builtInProviders,
+        ITtsSettingsStore settingsStore,
+        OpenAiCompatibleHttpClient openAiClient)
+    {
+        this.settingsStore = settingsStore;
+        this.openAiClient = openAiClient;
+        this.builtInProviders = [.. builtInProviders];
+        builtInProvidersById = this.builtInProviders
+            .GroupBy(static provider => provider.Info.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.Single(),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<IReadOnlyList<SpeechProviderInfo>> GetProvidersAsync(CancellationToken cancellationToken)
     {
         var settings = await settingsStore.LoadAsync(cancellationToken);
-        return
-        [
-            windowsProvider.Info,
-            .. settings.OpenAiCompatibleProfiles.Select(static profile =>
-                new SpeechProviderInfo(profile.Id, profile.DisplayName, SpeechProviderKind.OpenAiCompatible))
-        ];
+        var providers = new List<SpeechProviderInfo>(builtInProviders.Count + settings.OpenAiCompatibleProfiles.Count);
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var provider in builtInProviders)
+        {
+            if (seenIds.Add(provider.Info.Id))
+            {
+                providers.Add(provider.Info);
+            }
+        }
+
+        foreach (var profile in settings.OpenAiCompatibleProfiles)
+        {
+            if (seenIds.Add(profile.Id))
+            {
+                providers.Add(new SpeechProviderInfo(
+                    profile.Id,
+                    profile.DisplayName,
+                    SpeechProviderKind.OpenAiCompatible));
+            }
+        }
+
+        return providers;
     }
 
-    public async Task<string> GetDefaultProviderIdAsync(CancellationToken cancellationToken) =>
-        (await settingsStore.LoadAsync(cancellationToken)).DefaultProviderId;
+    public async Task<string> GetDefaultProviderIdAsync(CancellationToken cancellationToken)
+    {
+        var settings = await settingsStore.LoadAsync(cancellationToken);
+        return ResolveDefaultProviderId(settings);
+    }
 
     public async Task<IReadOnlyList<SpeechVoice>> GetVoicesAsync(string providerId, CancellationToken cancellationToken)
     {
@@ -55,22 +86,52 @@ internal sealed class AudioSynthesizer(
         return new AudioSynthesisSession(provider, configuredVoice);
     }
 
+    private string ResolveDefaultProviderId(TtsSettings settings)
+    {
+        if (IsBuiltInProviderAvailable(settings.DefaultProviderId)
+            || settings.OpenAiCompatibleProfiles.Any(profile =>
+                string.Equals(profile.Id, settings.DefaultProviderId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return settings.DefaultProviderId;
+        }
+
+        if (string.Equals(settings.DefaultProviderId, TtsSettings.WindowsProviderId, StringComparison.OrdinalIgnoreCase))
+        {
+            return settings.OpenAiCompatibleProfiles.FirstOrDefault()?.Id
+                ?? throw CreateWindowsProviderUnavailableException();
+        }
+
+        throw new InvalidOperationException($"TTS provider '{settings.DefaultProviderId}' is not configured.");
+    }
+
     private async Task<ISpeechProvider> ResolveProviderAsync(string providerId, CancellationToken cancellationToken)
     {
-        if (string.Equals(providerId, TtsSettings.WindowsProviderId, StringComparison.OrdinalIgnoreCase))
+        if (builtInProvidersById.TryGetValue(providerId, out var builtInProvider))
         {
-            return windowsProvider;
+            return builtInProvider;
         }
 
         var settings = await settingsStore.LoadAsync(cancellationToken);
         var profile = settings.OpenAiCompatibleProfiles.FirstOrDefault(candidate =>
-            string.Equals(candidate.Id, providerId, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException($"TTS provider '{providerId}' is not configured.");
+            string.Equals(candidate.Id, providerId, StringComparison.OrdinalIgnoreCase));
+        if (profile != null)
+        {
+            return new OpenAiCompatibleSpeechProvider(profile, openAiClient);
+        }
 
-        return new OpenAiCompatibleSpeechProvider(
-            profile,
-            openAiClient);
+        if (string.Equals(providerId, TtsSettings.WindowsProviderId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw CreateWindowsProviderUnavailableException();
+        }
+
+        throw new InvalidOperationException($"TTS provider '{providerId}' is not configured.");
     }
+
+    private bool IsBuiltInProviderAvailable(string providerId) =>
+        builtInProvidersById.ContainsKey(providerId);
+
+    private static InvalidOperationException CreateWindowsProviderUnavailableException() =>
+        new("The Windows TTS provider is not available in this build. Configure at least one OpenAI-compatible TTS profile and use it as the default provider.");
 
     private sealed class AudioSynthesisSession(
         ISpeechProvider provider,
@@ -84,97 +145,6 @@ internal sealed class AudioSynthesizer(
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(content);
             return provider.SynthesizeWavAsync(content, Voice, cancellationToken);
-        }
-    }
-}
-
-internal sealed class WindowsSpeechProvider(ILogger<WindowsSpeechProvider> logger) : ISpeechProvider
-{
-    public SpeechProviderInfo Info { get; } = new(
-        TtsSettings.WindowsProviderId,
-        "Windows voices",
-        SpeechProviderKind.Windows);
-
-    public int MaximumInputCharacters => int.MaxValue;
-
-    public Task<IReadOnlyList<SpeechVoice>> GetVoicesAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        using var synthesizer = new SpeechSynthesizer();
-        IReadOnlyList<SpeechVoice> voices = [.. synthesizer
-            .GetInstalledVoices()
-            .Where(static voice => voice.Enabled)
-            .Select(static voice => new SpeechVoice(
-                TtsSettings.WindowsProviderId,
-                voice.VoiceInfo.Name,
-                voice.VoiceInfo.Name,
-                voice.VoiceInfo.Culture.Name,
-                voice.VoiceInfo.Gender.ToString(),
-                voice.VoiceInfo.Age.ToString()))];
-        return Task.FromResult(voices);
-    }
-
-    public async Task<Stream> SynthesizeWavAsync(string content, SpeechVoice voice, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        using var synthesizer = new SpeechSynthesizer();
-        var stream = new MemoryStream();
-        try
-        {
-            var culture = string.IsNullOrWhiteSpace(voice.Culture)
-                ? CultureInfo.CurrentCulture
-                : CultureInfo.GetCultureInfo(voice.Culture);
-            var prompt = new PromptBuilder(culture);
-            prompt.AppendText(content);
-
-            synthesizer.SelectVoice(voice.Id);
-            synthesizer.SetOutputToWaveStream(stream);
-
-            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            synthesizer.SpeakCompleted += HandleCompleted;
-            using var cancellationRegistration = cancellationToken.Register(synthesizer.SpeakAsyncCancelAll);
-            try
-            {
-                _ = synthesizer.SpeakAsync(prompt);
-                await completion.Task.WaitAsync(cancellationToken);
-            }
-            finally
-            {
-                synthesizer.SpeakCompleted -= HandleCompleted;
-            }
-
-            stream.Position = 0;
-            return stream;
-
-            void HandleCompleted(object? sender, SpeakCompletedEventArgs e)
-            {
-                if (e.Cancelled)
-                {
-                    completion.TrySetCanceled(cancellationToken.IsCancellationRequested
-                        ? cancellationToken
-                        : new CancellationToken(canceled: true));
-                }
-                else if (e.Error != null)
-                {
-                    completion.TrySetException(e.Error);
-                }
-                else
-                {
-                    completion.TrySetResult();
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            stream.Dispose();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            stream.Dispose();
-            logger.LogError(ex, "Windows speech synthesis failed for voice {VoiceId}.", voice.Id);
-            throw;
         }
     }
 }
@@ -212,7 +182,8 @@ internal sealed class OpenAiCompatibleSpeechProvider(
                 profile.TimeoutSeconds,
                 profile.ApiKeyEnvironmentVariable),
             "audio/speech",
-            new SpeechRequest(profile.Model, content, voice.Id, "wav", profile.Speed),
+            new OpenAiSpeechRequest(profile.Model, content, voice.Id, "wav", profile.Speed),
+            OpenAiRequestJsonContext.Default.OpenAiSpeechRequest,
             cancellationToken);
         var output = new MemoryStream(bytes, 0, bytes.Length, writable: false, publiclyVisible: true);
         ValidateWave(output);
@@ -234,86 +205,5 @@ internal sealed class OpenAiCompatibleSpeechProvider(
             stream.Dispose();
             throw new InvalidDataException("The TTS provider did not return WAV audio.");
         }
-    }
-
-    private sealed record SpeechRequest(
-        [property: JsonPropertyName("model")] string Model,
-        [property: JsonPropertyName("input")] string Input,
-        [property: JsonPropertyName("voice")] string Voice,
-        [property: JsonPropertyName("response_format")] string ResponseFormat,
-        [property: JsonPropertyName("speed")] double Speed);
-}
-
-internal sealed class WaveAudioPreviewService(
-    IAudioSynthesizer synthesizer,
-    ITextChunker textChunker) : IAudioPreviewService, IDisposable
-{
-    private readonly object _gate = new();
-    private CancellationTokenSource? _currentRequest;
-    private SoundPlayer? _player;
-    private Stream? _audio;
-
-    public async Task PlayAsync(string content, SpeechVoice voice, CancellationToken cancellationToken)
-    {
-        CancellationTokenSource request;
-        lock (_gate)
-        {
-            StopCore();
-            request = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _currentRequest = request;
-        }
-
-        Stream? audio = null;
-        SoundPlayer? player = null;
-        try
-        {
-            var session = await synthesizer.CreateSessionAsync(voice, request.Token);
-            var previewContent = textChunker.Split(content, session.MaximumInputCharacters)[0];
-            audio = await session.SynthesizeWavAsync(previewContent, request.Token);
-            request.Token.ThrowIfCancellationRequested();
-            player = new SoundPlayer(audio);
-            player.Load();
-
-            lock (_gate)
-            {
-                if (!ReferenceEquals(_currentRequest, request))
-                {
-                    throw new OperationCanceledException(request.Token);
-                }
-
-                _audio = audio;
-                _player = player;
-                audio = null;
-                player = null;
-                _player.Play();
-            }
-        }
-        finally
-        {
-            player?.Dispose();
-            audio?.Dispose();
-        }
-    }
-
-    public void Stop()
-    {
-        lock (_gate)
-        {
-            StopCore();
-        }
-    }
-
-    public void Dispose() => Stop();
-
-    private void StopCore()
-    {
-        _currentRequest?.Cancel();
-        _currentRequest?.Dispose();
-        _currentRequest = null;
-        _player?.Stop();
-        _player?.Dispose();
-        _player = null;
-        _audio?.Dispose();
-        _audio = null;
     }
 }

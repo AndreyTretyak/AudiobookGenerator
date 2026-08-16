@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace YewCone.AudiobookGenerator.Core;
 
+[JsonConverter(typeof(JsonStringEnumConverter<ImageDescriptionCoverState>))]
 public enum ImageDescriptionCoverState
 {
     SourceDefault,
@@ -113,10 +116,27 @@ internal sealed class ImageDescriptionProjectStore(
         ImageDescriptionProject project)
     {
         var path = project.SourceEpubPath;
+        if (!OperatingSystem.IsWindows()
+            && ((path.Length >= 3
+                    && char.IsAsciiLetter(path[0])
+                    && path[1] == ':'
+                    && path[2] is '\\' or '/')
+                || path.StartsWith(@"\\", StringComparison.Ordinal)))
+        {
+            throw new InvalidDataException(
+                "The sidecar contains an absolute Windows source path that cannot be resolved on this platform.");
+        }
+        if (OperatingSystem.IsWindows() && path.StartsWith('/'))
+        {
+            throw new InvalidDataException(
+                "The sidecar contains an absolute Unix source path that cannot be resolved on Windows.");
+        }
+
         return Path.IsPathRooted(path)
             ? new FileInfo(path)
             : new FileInfo(Path.GetFullPath(
-                path,
+                path.Replace('\\', Path.DirectorySeparatorChar)
+                    .Replace('/', Path.DirectorySeparatorChar),
                 sidecarFile.DirectoryName ?? Environment.CurrentDirectory));
     }
 
@@ -166,7 +186,11 @@ internal sealed class ImageDescriptionProjectStore(
             })]
         };
 
-        await AtomicJsonSettingsFile.SaveAsync(sidecarFile.FullName, project, cancellationToken);
+        await AtomicJsonSettingsFile.SaveAsync(
+            sidecarFile.FullName,
+            project,
+            AudiobookFileJsonContext.Default.ImageDescriptionProject,
+            cancellationToken);
         return new(skippedImportedImageCount, coverSelectionNotPersisted);
     }
 
@@ -178,6 +202,7 @@ internal sealed class ImageDescriptionProjectStore(
             sidecarFile.FullName,
             "Audiobook image-description project",
             static () => throw new InvalidDataException("A sidecar project file is required."),
+            AudiobookFileJsonContext.Default.ImageDescriptionProject,
             cancellationToken);
         if (project.SchemaVersion != ImageDescriptionProject.CurrentSchemaVersion)
         {
@@ -320,6 +345,9 @@ internal sealed class ImageDescriptionProjectStore(
     {
         var baseDirectory = sidecarFile.DirectoryName ?? Environment.CurrentDirectory;
         var relative = Path.GetRelativePath(baseDirectory, sourceEpub.FullName);
-        return Path.IsPathRooted(relative) ? sourceEpub.FullName : relative;
+        return Path.IsPathRooted(relative)
+            ? sourceEpub.FullName
+            : relative.Replace(Path.DirectorySeparatorChar, '/')
+                .Replace(Path.AltDirectorySeparatorChar, '/');
     }
 }

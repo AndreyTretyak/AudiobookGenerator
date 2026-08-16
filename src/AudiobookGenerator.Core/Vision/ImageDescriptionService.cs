@@ -95,40 +95,18 @@ internal sealed class OpenAiCompatibleImageDescriptionSession(
             cancellationToken);
         var context = BuildContext(book, image, includeExistingDescription, profile.MaximumContextCharacters);
         var dataUrl = $"data:{normalized.MimeType};base64,{Convert.ToBase64String(normalized.Content)}";
-        var payload = new
-        {
-            model = profile.Model,
-            messages = new object[]
-            {
-                new
-                {
-                    role = "system",
-                    content = profile.Prompt
-                },
-                new
-                {
-                    role = "user",
-                    content = new object[]
-                    {
-                        new
-                        {
-                            type = "text",
-                            text = context
-                        },
-                        new
-                        {
-                            type = "image_url",
-                            image_url = new
-                            {
-                                url = dataUrl
-                            }
-                        }
-                    }
-                }
-            },
-            temperature = profile.Temperature,
-            max_tokens = profile.MaximumOutputTokens
-        };
+        var payload = new OpenAiChatCompletionsRequest(
+            profile.Model,
+            [
+                new OpenAiSystemChatMessage(profile.Prompt),
+                new OpenAiUserChatMessage(
+                [
+                    new OpenAiUserTextContentPart(context),
+                    new OpenAiUserImageUrlContentPart(new OpenAiImageUrl(dataUrl))
+                ])
+            ],
+            profile.Temperature,
+            profile.MaximumOutputTokens);
 
         var responseBytes = await openAiClient.PostJsonForBytesAsync(
             new OpenAiEndpointRequestOptions(
@@ -139,6 +117,7 @@ internal sealed class OpenAiCompatibleImageDescriptionSession(
                 profile.ApiKeyEnvironmentVariable),
             "chat/completions",
             payload,
+            OpenAiRequestJsonContext.Default.OpenAiChatCompletionsRequest,
             cancellationToken,
             includeErrorBody: false,
             maximumResponseBytes: 1024 * 1024);

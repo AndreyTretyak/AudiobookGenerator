@@ -15,6 +15,7 @@ internal sealed partial class JsonVisionSettingsStore(VisionSettingsStoreOptions
             SettingsPath,
             "Vision",
             static () => new VisionSettings(),
+            AudiobookFileJsonContext.Default.VisionSettings,
             cancellationToken);
         ApplyEnvironmentOverrides(settings);
         Validate(settings);
@@ -24,7 +25,11 @@ internal sealed partial class JsonVisionSettingsStore(VisionSettingsStoreOptions
     public async Task SaveAsync(VisionSettings settings, CancellationToken cancellationToken)
     {
         Validate(settings);
-        await AtomicJsonSettingsFile.SaveAsync(SettingsPath, settings, cancellationToken);
+        await AtomicJsonSettingsFile.SaveAsync(
+            SettingsPath,
+            settings,
+            AudiobookFileJsonContext.Default.VisionSettings,
+            cancellationToken);
     }
 
     private static void ApplyEnvironmentOverrides(VisionSettings settings)

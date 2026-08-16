@@ -39,7 +39,7 @@ internal sealed class TtsSettingsMenu(
                 return;
             }
 
-            DisplayProfiles(settings);
+            await DisplayProfilesAsync(settings, cancellationToken);
 
             var choice = await AnsiConsole.PromptAsync(
                 new SelectionPrompt<string>()
@@ -95,7 +95,7 @@ internal sealed class TtsSettingsMenu(
         }
     }
 
-    private void DisplayProfiles(TtsSettings settings)
+    private async Task DisplayProfilesAsync(TtsSettings settings, CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule("[yellow]TTS providers[/]").LeftJustified());
@@ -110,18 +110,41 @@ internal sealed class TtsSettingsMenu(
             .AddColumn("Model")
             .AddColumn("Voices");
 
-        _ = table.AddRow(
-            string.Equals(settings.DefaultProviderId, TtsSettings.WindowsProviderId, StringComparison.OrdinalIgnoreCase) ? "[green]Yes[/]" : string.Empty,
-            TtsSettings.WindowsProviderId,
-            "Windows voices",
-            "Local Windows API",
-            "-",
-            "Installed");
-
-        foreach (var profile in settings.OpenAiCompatibleProfiles)
+        IReadOnlyList<SpeechProviderInfo> providers;
+        string? defaultProviderId;
+        string? configurationError = null;
+        try
         {
+            providers = await synthesizer.GetProvidersAsync(cancellationToken);
+            defaultProviderId = providers.Count == 0
+                ? null
+                : await synthesizer.GetDefaultProviderIdAsync(cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            providers = await synthesizer.GetProvidersAsync(cancellationToken);
+            defaultProviderId = null;
+            configurationError = ex.Message;
+        }
+
+        foreach (var provider in providers)
+        {
+            if (provider.Kind == SpeechProviderKind.Windows)
+            {
+                _ = table.AddRow(
+                    string.Equals(defaultProviderId, provider.Id, StringComparison.OrdinalIgnoreCase) ? "[green]Yes[/]" : string.Empty,
+                    Markup.Escape(provider.Id),
+                    Markup.Escape(provider.DisplayName),
+                    "Local Windows API",
+                    "-",
+                    "Installed");
+                continue;
+            }
+
+            var profile = settings.OpenAiCompatibleProfiles.First(profile =>
+                string.Equals(profile.Id, provider.Id, StringComparison.OrdinalIgnoreCase));
             _ = table.AddRow(
-                string.Equals(settings.DefaultProviderId, profile.Id, StringComparison.OrdinalIgnoreCase) ? "[green]Yes[/]" : string.Empty,
+                string.Equals(defaultProviderId, provider.Id, StringComparison.OrdinalIgnoreCase) ? "[green]Yes[/]" : string.Empty,
                 Markup.Escape(profile.Id),
                 Markup.Escape(profile.DisplayName),
                 Markup.Escape(profile.BaseUrl),
@@ -130,6 +153,15 @@ internal sealed class TtsSettingsMenu(
         }
 
         AnsiConsole.Write(table);
+        if (providers.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]No TTS providers are currently available. Add an OpenAI-compatible profile to enable speech synthesis.[/]");
+        }
+
+        if (configurationError != null)
+        {
+            AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(configurationError)}[/]");
+        }
     }
 
     private async Task AddProfileAsync(TtsSettings settings, CancellationToken cancellationToken)
@@ -187,7 +219,7 @@ internal sealed class TtsSettingsMenu(
         _ = settings.OpenAiCompatibleProfiles.Remove(profile);
         if (string.Equals(settings.DefaultProviderId, profile.Id, StringComparison.OrdinalIgnoreCase))
         {
-            settings.DefaultProviderId = TtsSettings.WindowsProviderId;
+            settings.DefaultProviderId = settings.OpenAiCompatibleProfiles.FirstOrDefault()?.Id ?? TtsSettings.WindowsProviderId;
         }
 
         await settingsStore.SaveAsync(settings, cancellationToken);
@@ -196,12 +228,14 @@ internal sealed class TtsSettingsMenu(
 
     private async Task SetDefaultProviderAsync(TtsSettings settings, CancellationToken cancellationToken)
     {
-        var providers = new[]
+        var providers = await synthesizer.GetProvidersAsync(cancellationToken);
+        if (providers.Count == 0)
         {
-            (Id: TtsSettings.WindowsProviderId, Name: "Windows voices")
-        }.Concat(settings.OpenAiCompatibleProfiles.Select(profile => (Id: profile.Id, Name: profile.DisplayName))).ToArray();
+            throw new InvalidOperationException("No TTS providers are currently available. Add an OpenAI-compatible profile first.");
+        }
+
         var choices = providers
-            .Select((provider, index) => $"{index + 1}. {Markup.Escape(provider.Name)} [{Markup.Escape(provider.Id)}]")
+            .Select((provider, index) => $"{index + 1}. {Markup.Escape(provider.DisplayName)} [{Markup.Escape(provider.Id)}]")
             .ToArray();
         var selection = await AnsiConsole.PromptAsync(
             new SelectionPrompt<string>()

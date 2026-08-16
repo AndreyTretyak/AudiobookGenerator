@@ -1,8 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>$(CurrentTargetFramework)</TargetFramework>
+    <TargetFramework>$(TestTargetFramework)</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <PropertyGroup Label="PlatformSymbols">
+    <DefineConstants Condition="'$(TargetFramework)' == '$(PortableTargetFramework)'">$(DefineConstants);AUDIOBOOKGENERATOR_PORTABLE</DefineConstants>
+    <DefineConstants Condition="'$(TargetFramework)' != '$(PortableTargetFramework)'">$(DefineConstants);AUDIOBOOKGENERATOR_WINDOWS_CORE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\AudiobookGenerator.Core\YewCone.AudiobookGenerator.Core.csproj" />

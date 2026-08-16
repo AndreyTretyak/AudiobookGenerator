@@ -48,7 +48,7 @@ internal class Program
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
-            AnsiConsole.WriteException(ex);
+            ExceptionDisplay.Write(ex);
             return 1;
         }
     }
@@ -136,6 +136,7 @@ internal class Program
         AnsiConsole.MarkupLine($"  [blue]--voice[/] [dim]<name>[/]    {Strings.HelpVoiceOption}");
         AnsiConsole.MarkupLine($"  [blue]--provider[/] [dim]<id>[/]    {Strings.HelpProviderOption}");
         AnsiConsole.MarkupLine($"  [blue]--output[/] [dim]<dir>[/]    {Strings.HelpOutputOption}");
+        AnsiConsole.MarkupLine("  [blue]--yes[/]                 Skip overwrite and start confirmations");
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"[dim]{Strings.HelpTipDragDrop}[/]");
 
@@ -215,6 +216,7 @@ internal class Program
         string? voiceName = null;
         string? providerId = null;
         string? outputDir = null;
+        var assumeYes = false;
 
         for (var i = 2; i < args.Length; i++)
         {
@@ -228,6 +230,9 @@ internal class Program
                     break;
                 case "--output" or "-o" when i + 1 < args.Length:
                     outputDir = args[++i].Trim('\"');
+                    break;
+                case "--yes" or "-y":
+                    assumeYes = true;
                     break;
             }
         }
@@ -246,7 +251,16 @@ internal class Program
         var book = session.BuildBook();
 
         // Find voice
-        providerId ??= await converter.Synthesizer.GetDefaultProviderIdAsync(cancellationToken);
+        try
+        {
+            providerId ??= await converter.Synthesizer.GetDefaultProviderIdAsync(cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
+            return 1;
+        }
+
         IReadOnlyList<SpeechVoice> voices;
         try
         {
@@ -307,9 +321,14 @@ internal class Program
 
         // Run conversion
         var conversionRunner = new ConversionRunner();
-        await conversionRunner.RunAsync(session, converter, cancellationToken, new DirectoryInfo(outputDir));
+        var converted = await conversionRunner.RunAsync(
+            session,
+            converter,
+            cancellationToken,
+            new DirectoryInfo(outputDir),
+            assumeYes);
 
-        return 0;
+        return converted ? 0 : 1;
     }
 
     private static async Task<int> RunListVoicesAsync(
@@ -331,6 +350,13 @@ internal class Program
         }
 
         var providers = await converter.Synthesizer.GetProvidersAsync(cancellationToken);
+        if (providers.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]No TTS providers are currently available.[/]");
+            AnsiConsole.MarkupLine("[dim]Configure an OpenAI-compatible TTS profile with 'audiobook tts'.[/]");
+            return 1;
+        }
+
         var selectedProviders = requestedProviderId == null
             ? providers
             : providers.Where(provider => string.Equals(provider.Id, requestedProviderId, StringComparison.OrdinalIgnoreCase)).ToArray();

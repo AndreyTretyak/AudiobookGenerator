@@ -196,7 +196,12 @@ public sealed class ImageDescriptionTests
             Assert.Equal("vision-secret", observedRequest.Headers.Authorization.Parameter);
             using var json = JsonDocument.Parse(requestJson!);
             Assert.Equal("vision-model", json.RootElement.GetProperty("model").GetString());
-            var content = json.RootElement.GetProperty("messages")[1].GetProperty("content");
+            var messages = json.RootElement.GetProperty("messages");
+            Assert.Equal("system", messages[0].GetProperty("role").GetString());
+            Assert.Equal(OpenAiCompatibleVisionProfile.DefaultDescriptionPrompt, messages[0].GetProperty("content").GetString());
+            Assert.Equal("user", messages[1].GetProperty("role").GetString());
+            Assert.Equal(200, json.RootElement.GetProperty("max_tokens").GetInt32());
+            var content = messages[1].GetProperty("content");
             Assert.Equal("text", content[0].GetProperty("type").GetString());
             var dataUrl = content[1].GetProperty("image_url").GetProperty("url").GetString();
             Assert.StartsWith("data:image/", dataUrl, StringComparison.Ordinal);
@@ -262,6 +267,24 @@ public sealed class ImageDescriptionTests
         Assert.Equal(missing.Id, candidate.ImageId);
         Assert.Empty(result.Failures);
         Assert.Equal(1, requests);
+    }
+
+    [Fact]
+    public async Task VisionSettingsPersistCamelCaseIndentedJson()
+    {
+        using var temporary = new TemporaryDirectory();
+        using var services = CreateServices(temporary.SettingsPath, new RecordingHandler(static (_, _) =>
+            Task.FromResult(JsonResponse("unused"))));
+        await SaveVisionSettingsAsync(services);
+
+        var json = await File.ReadAllTextAsync(System.IO.Path.Combine(temporary.Path, "vision-settings.json"));
+        Assert.Contains($"{Environment.NewLine}  \"defaultProfileId\": \"vision\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"maximumOutputTokens\": 200", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"DefaultProfileId\"", json, StringComparison.Ordinal);
+
+        var settings = await services.GetRequiredService<IVisionSettingsStore>().LoadAsync(CancellationToken.None);
+        Assert.Equal("vision", settings.DefaultProfileId);
+        Assert.Equal("vision-model", Assert.Single(settings.Profiles).Model);
     }
 
     [Fact]
@@ -450,6 +473,7 @@ public sealed class ImageDescriptionTests
 
             var saveResult = await store.SaveAsync(sidecar, source, book, "vision", CancellationToken.None);
             var serialized = await File.ReadAllTextAsync(sidecar.FullName);
+            using var serializedJson = JsonDocument.Parse(serialized);
             var project = await store.LoadAsync(sidecar, CancellationToken.None);
             Assert.False(Path.IsPathRooted(project.SourceEpubPath));
             Assert.Equal(source.FullName, store.ResolveSourceEpub(sidecar, project).FullName);
@@ -461,6 +485,10 @@ public sealed class ImageDescriptionTests
 
             Assert.DoesNotContain(secretValue, serialized, StringComparison.Ordinal);
             Assert.DoesNotContain(Convert.ToBase64String(content), serialized, StringComparison.Ordinal);
+            Assert.Equal("SourceImage", serializedJson.RootElement.GetProperty("coverState").GetString());
+            Assert.Equal(
+                "UserEdited",
+                serializedJson.RootElement.GetProperty("images")[0].GetProperty("descriptionOrigin").GetString());
             Assert.Equal(1, saveResult.SkippedImportedImageCount);
             Assert.False(saveResult.CoverSelectionNotPersisted);
             Assert.Equal(1, project.SkippedImportedImageCount);
@@ -531,6 +559,29 @@ public sealed class ImageDescriptionTests
         var savedPath = Assert.IsType<string>(method.Invoke(null, [sidecar, source]));
 
         Assert.Equal(source.FullName, savedPath);
+    }
+
+    [Fact]
+    public void SidecarResolvesWindowsStyleRelativeSeparatorsOnEveryPlatform()
+    {
+        using var temporary = new TemporaryDirectory();
+        var sidecarDirectory = System.IO.Path.Combine(temporary.Path, "output");
+        Directory.CreateDirectory(sidecarDirectory);
+        var sidecar = new FileInfo(System.IO.Path.Combine(sidecarDirectory, "book.audiobook.json"));
+        using var services = CreateServices(temporary.SettingsPath, new RecordingHandler(static (_, _) =>
+            Task.FromResult(JsonResponse("unused"))));
+        var store = services.GetRequiredService<IImageDescriptionProjectStore>();
+        var project = new ImageDescriptionProject
+        {
+            SourceEpubPath = @"..\books\book.epub",
+            SourceEpubSha256 = new string('0', 64)
+        };
+
+        var resolved = store.ResolveSourceEpub(sidecar, project);
+
+        Assert.Equal(
+            System.IO.Path.GetFullPath(System.IO.Path.Combine(temporary.Path, "books", "book.epub")),
+            resolved.FullName);
     }
 
     private static ServiceProvider CreateServices(string settingsPath, HttpMessageHandler handler)

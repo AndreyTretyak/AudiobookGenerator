@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -30,6 +29,27 @@ public sealed class TtsIntegrationTests
     }
 
     [Fact]
+    public async Task TtsSettingsPersistCamelCaseIndentedJson()
+    {
+        using var temporary = new TemporaryDirectory();
+        using var services = CreateServices(temporary.SettingsPath, new RecordingHandler(static (_, _) =>
+            Task.FromResult(WaveResponse())));
+        var store = services.GetRequiredService<ITtsSettingsStore>();
+
+        await store.SaveAsync(CreateSettings(), CancellationToken.None);
+
+        var json = await File.ReadAllTextAsync(temporary.SettingsPath);
+        Assert.Contains($"{Environment.NewLine}  \"defaultProviderId\": \"local\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"openAiCompatibleProfiles\": [", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"DefaultProviderId\"", json, StringComparison.Ordinal);
+
+        var roundTrip = await store.LoadAsync(CancellationToken.None);
+        Assert.Equal("local", roundTrip.DefaultProviderId);
+        Assert.Equal("kokoro", Assert.Single(roundTrip.OpenAiCompatibleProfiles).Model);
+    }
+
+#if AUDIOBOOKGENERATOR_WINDOWS_CORE
+    [RequiresWindowsVoiceFact]
     public async Task WindowsProviderProducesWaveWhenVoiceIsInstalled()
     {
         using var temporary = new TemporaryDirectory();
@@ -37,12 +57,9 @@ public sealed class TtsIntegrationTests
             Task.FromResult(WaveResponse())));
         var synthesizer = services.GetRequiredService<IAudioSynthesizer>();
         var voice = (await synthesizer.GetVoicesAsync(TtsSettings.WindowsProviderId, CancellationToken.None)).FirstOrDefault();
-        if (voice == null)
-        {
-            return;
-        }
+        Assert.NotNull(voice);
 
-        await using var audio = await synthesizer.SynthesizeWavAsync("Windows text to speech test.", voice, CancellationToken.None);
+        await using var audio = await synthesizer.SynthesizeWavAsync("Windows text to speech test.", voice!, CancellationToken.None);
         var header = new byte[12];
         var bytesRead = await audio.ReadAsync(header);
 
@@ -52,22 +69,90 @@ public sealed class TtsIntegrationTests
     }
 
     [Fact]
-    public async Task FfmpegConcatenatesSynthesizedWaveChunksWhenAvailable()
+    public async Task WindowsBuildExposesWindowsProvider()
     {
-        if (!await CanRunFfmpegAsync())
-        {
-            return;
-        }
-
         using var temporary = new TemporaryDirectory();
         using var services = CreateServices(temporary.SettingsPath, new RecordingHandler(static (_, _) =>
             Task.FromResult(WaveResponse())));
         var synthesizer = services.GetRequiredService<IAudioSynthesizer>();
-        var voice = (await synthesizer.GetVoicesAsync(TtsSettings.WindowsProviderId, CancellationToken.None)).FirstOrDefault();
-        if (voice == null)
-        {
-            return;
-        }
+
+        var providers = await synthesizer.GetProvidersAsync(CancellationToken.None);
+
+        Assert.Contains(providers, provider =>
+            string.Equals(provider.Id, TtsSettings.WindowsProviderId, StringComparison.OrdinalIgnoreCase)
+            && provider.Kind == SpeechProviderKind.Windows);
+    }
+#endif
+
+#if AUDIOBOOKGENERATOR_PORTABLE
+    [Fact]
+    public async Task PortableBuildDoesNotExposeWindowsProvider()
+    {
+        using var temporary = new TemporaryDirectory();
+        using var services = CreateServices(temporary.SettingsPath, new RecordingHandler(static (_, _) =>
+            Task.FromResult(WaveResponse())));
+        var synthesizer = services.GetRequiredService<IAudioSynthesizer>();
+
+        var providers = await synthesizer.GetProvidersAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(providers, provider =>
+            string.Equals(provider.Id, TtsSettings.WindowsProviderId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task PersistedWindowsDefaultFallsBackToExternalProviderWhenWindowsProviderIsUnavailable()
+    {
+        using var temporary = new TemporaryDirectory();
+        using var services = CreateServices(
+            temporary.SettingsPath,
+            new RecordingHandler(static (_, _) => Task.FromResult(WaveResponse())));
+        var store = services.GetRequiredService<ITtsSettingsStore>();
+        var settings = CreateSettings();
+        settings.DefaultProviderId = TtsSettings.WindowsProviderId;
+        await store.SaveAsync(settings, CancellationToken.None);
+        var synthesizer = services.GetRequiredService<IAudioSynthesizer>();
+
+        var providers = await synthesizer.GetProvidersAsync(CancellationToken.None);
+        var defaultProviderId = await synthesizer.GetDefaultProviderIdAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(providers, provider =>
+            string.Equals(provider.Id, TtsSettings.WindowsProviderId, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("local", Assert.Single(providers).Id);
+        Assert.Equal("local", defaultProviderId);
+    }
+
+    [Fact]
+    public async Task PersistedWindowsDefaultWithoutExternalProvidersThrowsActionableError()
+    {
+        using var temporary = new TemporaryDirectory();
+        using var services = CreateServices(
+            temporary.SettingsPath,
+            new RecordingHandler(static (_, _) => Task.FromResult(WaveResponse())));
+        await services.GetRequiredService<ITtsSettingsStore>().SaveAsync(new TtsSettings(), CancellationToken.None);
+        var synthesizer = services.GetRequiredService<IAudioSynthesizer>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            synthesizer.GetDefaultProviderIdAsync(CancellationToken.None));
+
+        Assert.Contains("Windows TTS provider is not available", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("OpenAI-compatible TTS profile", exception.Message, StringComparison.Ordinal);
+    }
+#endif
+
+    [RequiresFfmpegFact]
+    public async Task FfmpegConcatenatesSynthesizedWaveChunksWhenAvailable()
+    {
+        var ffmpeg = TestExecutableResolver.FindFfmpeg();
+        var ffprobe = TestExecutableResolver.FindFfprobe();
+        using var temporary = new TemporaryDirectory();
+        using var services = CreateServices(
+            temporary.SettingsPath,
+            new RecordingHandler(static (_, _) => Task.FromResult(WaveResponse())),
+            ffmpeg,
+            ffprobe);
+        await services.GetRequiredService<ITtsSettingsStore>().SaveAsync(CreateSettings(), CancellationToken.None);
+        var synthesizer = services.GetRequiredService<IAudioSynthesizer>();
+        var voice = Assert.Single(await synthesizer.GetVoicesAsync("local", CancellationToken.None));
 
         Directory.CreateDirectory(temporary.Path);
         var waveFiles = new List<FileInfo>();
@@ -133,23 +218,20 @@ public sealed class TtsIntegrationTests
         Assert.Contains("no narration text", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [RequiresFfmpegFact]
     public async Task FullConversionCleansGeneratedWorkFilesWhenDependenciesAreAvailable()
     {
-        if (!await CanRunFfmpegAsync())
-        {
-            return;
-        }
-
+        var ffmpeg = TestExecutableResolver.FindFfmpeg();
+        var ffprobe = TestExecutableResolver.FindFfprobe();
         using var temporary = new TemporaryDirectory();
-        using var services = CreateServices(temporary.SettingsPath, new RecordingHandler(static (_, _) =>
-            Task.FromResult(WaveResponse())));
+        using var services = CreateServices(
+            temporary.SettingsPath,
+            new RecordingHandler(static (_, _) => Task.FromResult(WaveResponse())),
+            ffmpeg,
+            ffprobe);
+        await services.GetRequiredService<ITtsSettingsStore>().SaveAsync(CreateSettings(), CancellationToken.None);
         var synthesizer = services.GetRequiredService<IAudioSynthesizer>();
-        var voice = (await synthesizer.GetVoicesAsync(TtsSettings.WindowsProviderId, CancellationToken.None)).FirstOrDefault();
-        if (voice == null)
-        {
-            return;
-        }
+        var voice = Assert.Single(await synthesizer.GetVoicesAsync("local", CancellationToken.None));
 
         Directory.CreateDirectory(temporary.Path);
         var converter = services.GetRequiredService<BookConverter>();
@@ -467,11 +549,24 @@ public sealed class TtsIntegrationTests
         Assert.Equal("kokoro", requestedModel);
     }
 
-    private static ServiceProvider CreateServices(string settingsPath, HttpMessageHandler handler)
+    private static ServiceProvider CreateServices(
+        string settingsPath,
+        HttpMessageHandler handler,
+        string? ffmpegExecutable = null,
+        string? ffprobeExecutable = null)
     {
         var services = new ServiceCollection()
             .AddLogging(static logging => logging.SetMinimumLevel(LogLevel.Debug))
             .AddBookConverter(settingsPath);
+        if (ffmpegExecutable != null && ffprobeExecutable != null)
+        {
+            services.AddSingleton<IAudioConverter>(serviceProvider => new FfmpegAudioConverter(
+                serviceProvider.GetRequiredService<IProcessRunner>(),
+                serviceProvider.GetRequiredService<IImageNormalizer>(),
+                ffmpegExecutable,
+                ffprobeExecutable));
+        }
+
         services.AddSingleton<IHttpClientFactory>(new StubHttpClientFactory(handler));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
     }
@@ -509,38 +604,40 @@ public sealed class TtsIntegrationTests
 
     private static byte[] CreateWave()
     {
-        var bytes = new byte[44];
-        Encoding.ASCII.GetBytes("RIFF").CopyTo(bytes, 0);
-        Encoding.ASCII.GetBytes("WAVE").CopyTo(bytes, 8);
-        Encoding.ASCII.GetBytes("fmt ").CopyTo(bytes, 12);
-        Encoding.ASCII.GetBytes("data").CopyTo(bytes, 36);
-        return bytes;
-    }
+        const int sampleRate = 16000;
+        const short bitsPerSample = 16;
+        const short channels = 1;
+        const int durationMilliseconds = 250;
+        const double frequency = 440d;
+        var sampleCount = sampleRate * durationMilliseconds / 1000;
+        var blockAlign = channels * bitsPerSample / 8;
+        var byteRate = sampleRate * blockAlign;
+        var dataLength = sampleCount * blockAlign;
 
-    private static async Task<bool> CanRunFfmpegAsync()
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "ffmpeg",
-                Arguments = "-version",
-                CreateNoWindow = true,
-                UseShellExecute = false
-            }
-        };
+        using var stream = new MemoryStream(44 + dataLength);
+        using var writer = new BinaryWriter(stream, Encoding.ASCII, leaveOpen: true);
+        writer.Write(Encoding.ASCII.GetBytes("RIFF"));
+        writer.Write(36 + dataLength);
+        writer.Write(Encoding.ASCII.GetBytes("WAVE"));
+        writer.Write(Encoding.ASCII.GetBytes("fmt "));
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write(channels);
+        writer.Write(sampleRate);
+        writer.Write(byteRate);
+        writer.Write((short)blockAlign);
+        writer.Write(bitsPerSample);
+        writer.Write(Encoding.ASCII.GetBytes("data"));
+        writer.Write(dataLength);
 
-        try
+        for (var sample = 0; sample < sampleCount; sample++)
         {
-            _ = process.Start();
+            var value = (short)(Math.Sin(2 * Math.PI * frequency * sample / sampleRate) * short.MaxValue * 0.2);
+            writer.Write(value);
         }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            return false;
-        }
 
-        await process.WaitForExitAsync();
-        return process.ExitCode == 0;
+        writer.Flush();
+        return stream.ToArray();
     }
 
     private sealed class StubHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory

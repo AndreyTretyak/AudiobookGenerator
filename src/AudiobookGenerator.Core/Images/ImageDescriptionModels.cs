@@ -2,8 +2,11 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using System.Text.Json.Serialization;
+
 namespace YewCone.AudiobookGenerator.Core;
 
+[JsonConverter(typeof(JsonStringEnumConverter<ImageDescriptionOrigin>))]
 public enum ImageDescriptionOrigin
 {
     None,
