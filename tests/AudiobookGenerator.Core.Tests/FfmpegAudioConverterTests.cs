@@ -34,7 +34,7 @@ public sealed class FfmpegAudioConverterTests
         var converter = services.GetRequiredService<BookConverter>();
         var cover = CreateRasterImage(320, 320, SKColors.Firebrick, SKEncodedImageFormat.Png);
         var imageTwo = CreateRasterImage(200, 120, SKColors.ForestGreen, SKEncodedImageFormat.Jpeg);
-        var imageThree = CreateRasterImage(180, 260, SKColors.RoyalBlue, SKEncodedImageFormat.Png);
+        var imageThree = CreateRasterImage(4200, 12, SKColors.RoyalBlue, SKEncodedImageFormat.Png);
         var title = "Тест \"Title\" = #1 \\\\ 路径";
         var description = "Первый ряд;\nSecond line = #2 \\\\ 路径";
         var chapterOneTitle = "Первая \"глава\" = #1 C:\\Books\\One";
@@ -93,7 +93,13 @@ public sealed class FfmpegAudioConverterTests
         Assert.Equal(3, attachedStreams.Length);
         Assert.Equal((320, 320), GetDimensions(attachedStreams[0]));
         Assert.Equal((200, 120), GetDimensions(attachedStreams[1]));
-        Assert.Equal((180, 260), GetDimensions(attachedStreams[2]));
+        Assert.Equal((4200, 12), GetDimensions(attachedStreams[2]));
+
+        var extractedImage = Path.Combine(temporary.Path, "extracted-original.png");
+        await ExtractAttachedImageAsync(output.FullName, videoStreamIndex: 2, extractedImage);
+        Assert.Equal(
+            System.Security.Cryptography.SHA256.HashData(imageThree),
+            System.Security.Cryptography.SHA256.HashData(await File.ReadAllBytesAsync(extractedImage)));
     }
 
     [Fact]
@@ -252,6 +258,53 @@ public sealed class FfmpegAudioConverterTests
         }
 
         return JsonDocument.Parse(output);
+    }
+
+    private static async Task ExtractAttachedImageAsync(
+        string audiobookPath,
+        int videoStreamIndex,
+        string outputPath)
+    {
+        var ffmpeg = TestExecutableResolver.FindFfmpeg();
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = ffmpeg,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
+        foreach (var argument in new[]
+        {
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            audiobookPath,
+            "-map",
+            $"0:v:{videoStreamIndex}",
+            "-c",
+            "copy",
+            "-frames:v",
+            "1",
+            outputPath
+        })
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        _ = process.Start();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var error = await errorTask;
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"ffmpeg failed to extract attached image with exit code {process.ExitCode}: {error}");
+        }
     }
 
     private static FileInfo CreatePlaceholderFile(string directory, string name)

@@ -10,8 +10,6 @@ public sealed class FfmpegAudioConverter(
     string ffprobeExecutable = "ffprobe") : IAudioConverter
 {
     private const int MaximumCapturedCharacters = 256 * 1024;
-    private const int AttachmentMaximumDimension = 4096;
-    private const int AttachmentMaximumBytes = 32 * 1024 * 1024;
     private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
     private readonly object initializeGate = new();
     private Task<FfmpegToolPaths>? initializeTask;
@@ -167,28 +165,18 @@ public sealed class FfmpegAudioConverter(
         var metadataPath = CreateSiblingTempPath(m4bFile, ".metadata.ffmetadata");
         var tempOutput = new FileInfo(CreateSiblingTempPath(m4bFile, m4bFile.Extension));
         var preserveTemporaryOutput = false;
-        var normalizedAttachments = new List<NormalizedAttachment>();
+        var attachments = new List<PreparedAttachment>();
 
         try
         {
             foreach (var (image, index) in EnumerateAttachments(bookInfo).Select((image, index) => (image, index)))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var normalized = await imageNormalizer.NormalizeAsync(
+                attachments.Add(await PrepareAttachmentAsync(
+                    m4bFile,
                     image,
-                    AttachmentMaximumDimension,
-                    AttachmentMaximumBytes,
-                    cancellationToken).ConfigureAwait(false);
-                var extension = normalized.MimeType switch
-                {
-                    "image/png" => ".png",
-                    "image/jpeg" => ".jpg",
-                    _ => throw new InvalidDataException(
-                        $"Normalized image '{image.FileName}' produced unsupported MIME type '{normalized.MimeType}'.")
-                };
-                var normalizedPath = CreateSiblingTempPath(m4bFile, $".{index:0000}{extension}");
-                await File.WriteAllBytesAsync(normalizedPath, normalized.Content, cancellationToken).ConfigureAwait(false);
-                normalizedAttachments.Add(new(normalizedPath));
+                    index,
+                    cancellationToken).ConfigureAwait(false));
             }
 
             await WriteGlobalMetadataFileAsync(metadataPath, bookInfo, cancellationToken).ConfigureAwait(false);
@@ -202,7 +190,7 @@ public sealed class FfmpegAudioConverter(
                 m4bFile.FullName
             };
 
-            foreach (var attachment in normalizedAttachments)
+            foreach (var attachment in attachments)
             {
                 arguments.Add("-i");
                 arguments.Add(attachment.Path);
@@ -218,7 +206,7 @@ public sealed class FfmpegAudioConverter(
                 "0:a:0"
             ]);
 
-            for (var index = 0; index < normalizedAttachments.Count; index++)
+            for (var index = 0; index < attachments.Count; index++)
             {
                 arguments.Add("-map");
                 arguments.Add($"{index + 1}:v:0");
@@ -227,14 +215,14 @@ public sealed class FfmpegAudioConverter(
             arguments.AddRange(
             [
                 "-map_metadata",
-                (normalizedAttachments.Count + 1).ToString(CultureInfo.InvariantCulture),
+                (attachments.Count + 1).ToString(CultureInfo.InvariantCulture),
                 "-map_chapters",
                 "0",
                 "-c",
                 "copy"
             ]);
 
-            for (var index = 0; index < normalizedAttachments.Count; index++)
+            for (var index = 0; index < attachments.Count; index++)
             {
                 arguments.Add($"-disposition:v:{index}");
                 arguments.Add("attached_pic");
@@ -255,11 +243,69 @@ public sealed class FfmpegAudioConverter(
             {
                 DeleteIfExists(tempOutput.FullName);
             }
-            foreach (var attachment in normalizedAttachments)
+            foreach (var attachment in attachments)
             {
                 DeleteIfExists(attachment.Path);
             }
         }
+    }
+
+    private async Task<PreparedAttachment> PrepareAttachmentAsync(
+        FileInfo m4bFile,
+        BookImage image,
+        int index,
+        CancellationToken cancellationToken)
+    {
+        byte[] content;
+        string extension;
+        if (TryGetOriginalAttachmentExtension(image.Content, out extension))
+        {
+            content = image.Content;
+        }
+        else
+        {
+            var normalized = await imageNormalizer.NormalizeAsync(
+                image,
+                int.MaxValue,
+                int.MaxValue,
+                cancellationToken).ConfigureAwait(false);
+            content = normalized.Content;
+            extension = normalized.MimeType switch
+            {
+                "image/png" => ".png",
+                "image/jpeg" => ".jpg",
+                _ => throw new InvalidDataException(
+                    $"Normalized image '{image.FileName}' produced unsupported MIME type '{normalized.MimeType}'.")
+            };
+        }
+
+        var path = CreateSiblingTempPath(m4bFile, $".{index:0000}{extension}");
+        await File.WriteAllBytesAsync(path, content, cancellationToken).ConfigureAwait(false);
+        return new(path);
+    }
+
+    private static bool TryGetOriginalAttachmentExtension(
+        ReadOnlySpan<byte> content,
+        out string extension)
+    {
+        ReadOnlySpan<byte> pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        if (content.StartsWith(pngSignature))
+        {
+            extension = ".png";
+            return true;
+        }
+
+        if (content.Length >= 3
+            && content[0] == 0xFF
+            && content[1] == 0xD8
+            && content[2] == 0xFF)
+        {
+            extension = ".jpg";
+            return true;
+        }
+
+        extension = string.Empty;
+        return false;
     }
 
     private async Task<FfmpegToolPaths> EnsureInitializedAsync(
@@ -591,5 +637,5 @@ public sealed class FfmpegAudioConverter(
 
     private sealed record ChapterTiming(string Title, long StartMilliseconds, long EndMilliseconds);
 
-    private sealed record NormalizedAttachment(string Path);
+    private sealed record PreparedAttachment(string Path);
 }
