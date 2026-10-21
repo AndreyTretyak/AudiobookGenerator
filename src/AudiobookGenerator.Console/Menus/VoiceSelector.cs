@@ -1,7 +1,5 @@
 using Spectre.Console;
 
-using System.Speech.Synthesis;
-
 using YewCone.AudiobookGenerator.Console.Models;
 using YewCone.AudiobookGenerator.Console.Resources;
 using YewCone.AudiobookGenerator.Core;
@@ -16,13 +14,33 @@ internal sealed class VoiceSelector
     /// <summary>
     /// Runs the voice selection menu.
     /// </summary>
-    public async Task RunAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
+    public async Task RunAsync(
+        BookEditSession session,
+        IAudioSynthesizer synthesizer,
+        CancellationToken cancellationToken,
+        string? preferredProviderId = null)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderSelectVoice}[/]").LeftJustified());
         AnsiConsole.WriteLine();
 
-        var voices = synthesizer.GetVoices().ToList();
+        var providers = await synthesizer.GetProvidersAsync(cancellationToken);
+        if (providers.Count == 0)
+        {
+            AnsiConsole.MarkupLine($"[red]{Strings.ErrorNoVoicesFound}[/]");
+            return;
+        }
+
+        var selectedProviderId = session.SelectedVoice?.ProviderId
+            ?? preferredProviderId
+            ?? await synthesizer.GetDefaultProviderIdAsync(cancellationToken);
+        var provider = await SelectProviderAsync(providers, selectedProviderId, cancellationToken);
+        if (provider == null)
+        {
+            return;
+        }
+
+        var voices = (await synthesizer.GetVoicesAsync(provider.Id, cancellationToken)).ToList();
 
         if (voices.Count == 0)
         {
@@ -36,6 +54,7 @@ internal sealed class VoiceSelector
             .Border(TableBorder.Rounded)
             .AddColumn(Strings.ColumnNumber)
             .AddColumn(Strings.ColumnName)
+            .AddColumn("ID")
             .AddColumn(Strings.ColumnCulture)
             .AddColumn(Strings.ColumnGender)
             .AddColumn(Strings.ColumnAge);
@@ -49,9 +68,10 @@ internal sealed class VoiceSelector
             _ = table.AddRow(
                 marker,
                 isSelected ? $"[green]{Markup.Escape(voice.Name)}[/]" : Markup.Escape(voice.Name),
-                voice.Culture.DisplayName,
-                voice.Gender.ToString(),
-                voice.Age.ToString());
+                Markup.Escape(voice.Id),
+                Markup.Escape(voice.Culture ?? "-"),
+                Markup.Escape(voice.Gender ?? "-"),
+                Markup.Escape(voice.Age ?? "-"));
         }
 
         AnsiConsole.Write(table);
@@ -64,7 +84,7 @@ internal sealed class VoiceSelector
         }
 
         var choices = voices
-            .Select(v => $"{Markup.Escape(v.Name)} ({v.Culture.Name}, {v.Gender})")
+            .Select((voice, index) => $"{index + 1}. {Markup.Escape(voice.Name)} [{Markup.Escape(voice.Id)}]")
             .Append(Strings.MenuBackToMainMenu)
             .ToList();
 
@@ -78,7 +98,8 @@ internal sealed class VoiceSelector
 
         if (selection != Strings.MenuBackToMainMenu)
         {
-            var selectedVoice = voices.First(v => selection.StartsWith(Markup.Escape(v.Name)));
+            var voiceIndex = int.Parse(selection[..selection.IndexOf('.', StringComparison.Ordinal)]) - 1;
+            var selectedVoice = voices[voiceIndex];
             session.SelectedVoice = selectedVoice;
             AnsiConsole.MarkupLine($"[green]{string.Format(Strings.StatusVoiceSet, Markup.Escape(selectedVoice.Name))}[/]");
         }
@@ -87,7 +108,7 @@ internal sealed class VoiceSelector
     /// <summary>
     /// Prompts for voice selection if not already selected, used during direct conversion.
     /// </summary>
-    public async Task<VoiceInfo?> EnsureVoiceSelectedAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
+    public async Task<SpeechVoice?> EnsureVoiceSelectedAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
     {
         if (session.SelectedVoice != null)
         {
@@ -96,5 +117,44 @@ internal sealed class VoiceSelector
 
         await RunAsync(session, synthesizer, cancellationToken);
         return session.SelectedVoice;
+    }
+
+    private static async Task<SpeechProviderInfo?> SelectProviderAsync(
+        IReadOnlyList<SpeechProviderInfo> providers,
+        string selectedProviderId,
+        CancellationToken cancellationToken)
+    {
+        if (providers.Count == 1)
+        {
+            return providers[0];
+        }
+
+        var choices = providers
+            .Select((provider, index) =>
+                $"{index + 1}. {Markup.Escape(provider.DisplayName)} [{Markup.Escape(provider.Id)}]")
+            .Append(Strings.MenuBackToMainMenu)
+            .ToList();
+
+        var selectedIndex = providers
+            .Select((provider, index) => (provider, index))
+            .FirstOrDefault(item => string.Equals(item.provider.Id, selectedProviderId, StringComparison.OrdinalIgnoreCase))
+            .index;
+
+        var selection = await AnsiConsole.PromptAsync(
+            new SelectionPrompt<string>()
+                .Title(Strings.PromptSelectProvider)
+                .PageSize(10)
+                .HighlightStyle(Style.Parse("blue bold"))
+                .AddChoices(choices)
+                .MoreChoicesText($"Current provider: {providers[selectedIndex].DisplayName}"),
+            cancellationToken);
+
+        if (selection == Strings.MenuBackToMainMenu)
+        {
+            return null;
+        }
+
+        var providerIndex = int.Parse(selection[..selection.IndexOf('.', StringComparison.Ordinal)]) - 1;
+        return providers[providerIndex];
     }
 }

@@ -347,4 +347,70 @@ public class Resources {
             return ResourceManager.GetString("VoicePlaceholder", resourceCulture);
         }
     }
+
+    public static string ProviderLabel {
+        get {
+            return ResourceManager.GetString("ProviderLabel", resourceCulture);
+        }
+    }
+
+    public static string TtsSettingsLabel {
+        get {
+            return ResourceManager.GetString("TtsSettingsLabel", resourceCulture);
+        }
+    }
+
+    public static string CancelGenerationLabel {
+        get {
+            return ResourceManager.GetString("CancelGenerationLabel", resourceCulture);
+        }
+    }
+
+    public static string GenerationCancelledMessage {
+        get {
+            return ResourceManager.GetString("GenerationCancelledMessage", resourceCulture);
+        }
+    }
+
+    public static string VisionModelLabel {
+        get {
+            return ResourceManager.GetString("VisionModelLabel", resourceCulture);
+        }
+    }
+
+    public static string VisionSettingsLabel {
+        get {
+            return ResourceManager.GetString("VisionSettingsLabel", resourceCulture);
+        }
+    }
+
+    public static string GenerateMissingDescriptionsLabel {
+        get {
+            return ResourceManager.GetString("GenerateMissingDescriptionsLabel", resourceCulture);
+        }
+    }
+
+    public static string SaveProjectAsLabel {
+        get {
+            return ResourceManager.GetString("SaveProjectAsLabel", resourceCulture);
+        }
+    }
+
+    public static string ApprovedNarrationLabel {
+        get {
+            return ResourceManager.GetString("ApprovedNarrationLabel", resourceCulture);
+        }
+    }
+
+    public static string GeneratedCandidateLabel {
+        get {
+            return ResourceManager.GetString("GeneratedCandidateLabel", resourceCulture);
+        }
+    }
+
+    public static string ImagePrivacyNotice {
+        get {
+            return ResourceManager.GetString("ImagePrivacyNotice", resourceCulture);
+        }
+    }
 }

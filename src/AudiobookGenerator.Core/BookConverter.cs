@@ -1,17 +1,11 @@
-﻿using FFMpegCore;
-using FFMpegCore.Enums;
-using FFMpegCore.Pipes;
-
-using HtmlAgilityPack;
+﻿using HtmlAgilityPack;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using System.Diagnostics;
-using System.Speech.Synthesis;
 using System.Text.RegularExpressions;
 
-using TagLib;
 
 using VersOne.Epub;
 using VersOne.Epub.Options;
@@ -20,20 +14,102 @@ namespace YewCone.AudiobookGenerator.Core;
 
 public static class AudioBookConverterDependencyInjectionExtensions
 {
-    public static IServiceCollection AddBookConverter(this IServiceCollection services)
+    public const string SettingsDirectoryEnvironmentVariable = "AUDIOBOOKGENERATOR_SETTINGS_DIRECTORY";
+
+    public static IServiceCollection AddBookConverter(this IServiceCollection services, string? ttsSettingsPath = null)
     {
-        return services
+        if (ttsSettingsPath == null)
+        {
+            var configuredDirectory = Environment.GetEnvironmentVariable(SettingsDirectoryEnvironmentVariable);
+            var settingsDirectory = string.IsNullOrWhiteSpace(configuredDirectory)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "YewCone",
+                    "AudiobookGenerator")
+                : Path.GetFullPath(configuredDirectory);
+            ttsSettingsPath = Path.Combine(settingsDirectory, "tts-settings.json");
+        }
+
+        var visionSettingsPath = Path.Combine(
+            Path.GetDirectoryName(ttsSettingsPath)
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "vision-settings.json");
+
+        services
             .AddSingleton<IAudioConverter, FfmpegAudioConverter>()
             .AddSingleton<IHtmlConverter, HtmlAgilityPackHtmlConverter>()
             .AddSingleton<IEpubBookParser, VersOneEpubBookParser>()
-            .AddSingleton<IAudioSynthesizer, LocalAudioSynthesizer>()
-            .AddSingleton<BookConverter>();
+            .AddSingleton(new TtsSettingsStoreOptions(ttsSettingsPath))
+            .AddSingleton<ITtsSettingsStore, JsonTtsSettingsStore>()
+            .AddSingleton(new VisionSettingsStoreOptions(visionSettingsPath))
+            .AddSingleton<IVisionSettingsStore, JsonVisionSettingsStore>()
+            .AddSingleton<OpenAiCompatibleHttpClient>()
+            .AddSingleton<IAudioSynthesizer, AudioSynthesizer>()
+            .AddSingleton<ITextChunker, NaturalTextChunker>()
+            .AddSingleton<IImageNarrationRenderer, ImageNarrationRenderer>()
+            .AddSingleton<IImageNormalizer, SkiaImageNormalizer>()
+            .AddSingleton<IImageDescriptionService, ImageDescriptionService>()
+            .AddSingleton<IImageDescriptionWorkflow, ImageDescriptionWorkflow>()
+            .AddSingleton<IImageDescriptionProjectStore, ImageDescriptionProjectStore>()
+            .AddSingleton<IProcessRunner, ProcessRunner>()
+            .AddHttpClient();
+
+#if AUDIOBOOKGENERATOR_WINDOWS_CORE
+        services
+            .AddSingleton<ISpeechProvider, WindowsSpeechProvider>()
+            .AddSingleton<IAudioPreviewService, WaveAudioPreviewService>();
+#else
+        services.AddSingleton<IAudioPreviewService, ExternalAudioPreviewService>();
+#endif
+
+        return services.AddSingleton<BookConverter>();
     }
 }
 
-public record BookChapter(string FileName, string Name, string Content);
+public sealed record BookChapter
+{
+    private string content;
+    private readonly string[] requiredOccurrenceIds;
 
-public record BookImage(string FileName, byte[] Content);
+    public BookChapter(
+        string fileName,
+        string name,
+        string content,
+        BookImageOccurrence[]? imageOccurrences = null)
+    {
+        FileName = fileName;
+        Name = name;
+        this.content = content;
+        ImageOccurrences = imageOccurrences;
+        requiredOccurrenceIds = [.. ImageNarrationMarker
+            .ExtractOccurrenceIds(content)
+            .Order(StringComparer.Ordinal)];
+    }
+
+    public string FileName { get; init; }
+
+    public string Name { get; init; }
+
+    public string Content
+    {
+        get => content;
+        set
+        {
+            var updatedIds = ImageNarrationMarker
+                .ExtractOccurrenceIds(value)
+                .Order(StringComparer.Ordinal);
+            if (!requiredOccurrenceIds.SequenceEqual(updatedIds, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Chapter edits must preserve every [[image-ref:...]] marker.");
+            }
+
+            content = value;
+        }
+    }
+
+    public BookImageOccurrence[]? ImageOccurrences { get; init; }
+}
 
 public record Book(
     string FileName,
@@ -42,7 +118,8 @@ public record Book(
     List<string> AuthorList,
     byte[]? CoverImage,
     BookChapter[] Chapters,
-    BookImage[] Images);
+    BookImage[] Images,
+    string? Language = null);
 
 public interface IEpubBookParser
 {
@@ -51,28 +128,19 @@ public interface IEpubBookParser
 
 public interface IHtmlConverter
 {
-    Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
-}
-
-public interface IAudioSynthesizer
-{
-    IEnumerable<VoiceInfo> GetVoices();
-
-    void Speak(string text, VoiceInfo voice);
-
-    void StopSpeaking();
-
-    Task<Stream> SynthesizeWavFromTextAsync(string name, string content, VoiceInfo voice, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
+    Task<HtmlTextConversionResult> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken);
 }
 
 public interface IAudioConverter
 {
-    Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
+    Task ConvertWavToAacAsync(IEnumerable<FileInfo> wavFiles, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
 
-    Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
+    Task CreateM4bAsync(IEnumerable<AudioChapter> aacChapters, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
 
     Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken);
 }
+
+public sealed record AudioChapter(FileInfo AudioFile, string Title);
 
 internal static class DirectoryInfoExtension
 {
@@ -87,156 +155,11 @@ internal static class DirectoryInfoExtension
     }
 }
 
-public class FfmpegAudioConverter : IAudioConverter
-{
-    private Task? initializeTask;
-
-    public Task AddImagesAndTagsToM4bAsync(FileInfo m4bFile, Book bookInfo, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
-    {
-        static Picture ByteToPicture(byte[] bytes) => new(new ByteVector(bytes));
-
-        using var state = progress.Start(Path.GetFileNameWithoutExtension(m4bFile.Name), StageType.UpdatingM4bMetadata);
-
-        var file = TagLib.File.Create(m4bFile.FullName);
-
-        IPicture? coverImage = null;
-        if (bookInfo.CoverImage != null)
-        {
-            coverImage = ByteToPicture(bookInfo.CoverImage);
-            coverImage.Type = TagLib.PictureType.FrontCover;
-        }
-
-        file.Tag.Title = bookInfo.Title;
-        file.Tag.TitleSort = bookInfo.Title;
-        file.Tag.Album = bookInfo.Title;
-        file.Tag.Comment = bookInfo.Description;
-        file.Tag.Performers = [.. bookInfo.AuthorList];
-
-        var allImages = bookInfo.Images.Select(i => ByteToPicture(i.Content));
-        file.Tag.Pictures = coverImage != null ? [coverImage, .. allImages] : allImages.ToArray();
-
-        file.Save();
-
-        return Task.CompletedTask;
-    }
-
-    public async Task ConvertWavToAacAsync(Stream wavStream, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
-    {
-        await EnsureInitializedAsync(progress, cancellationToken).ConfigureAwait(false);
-        using var state = progress.Start(Path.GetFileNameWithoutExtension(outputFile.Name), StageType.ConvertWavToAac);
-        _ = await FFMpegArguments
-            .FromPipeInput(new StreamPipeSource(wavStream))
-            .OutputToFile(outputFile.FullName, true, options => options.WithAudioCodec(AudioCodec.Aac))
-            .ProcessAsynchronously()
-            .ConfigureAwait(false);
-    }
-
-    public async Task CreateM4bAsync(IEnumerable<FileInfo> aacChapters, FileInfo outputFile, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
-    {
-        using var state = progress.Start(Path.GetFileNameWithoutExtension(outputFile.Name), StageType.MergingIntoM4b);
-
-        var files = aacChapters.Select(f => f.FullName);
-
-        var chaptersFile = outputFile.GetFileInSameDir("chapters.txt");
-        using (StreamWriter stream = new StreamWriter(chaptersFile))
-        {
-            stream.WriteLine(";FFMETADATA1");
-
-            long start = 0;
-            foreach (var file in files)
-            {
-                var mediaInfo = await FFProbe.AnalyseAsync(file, cancellationToken: cancellationToken);
-                var end = start + (long)mediaInfo.Duration.TotalMilliseconds;
-
-                stream.WriteLine("[CHAPTER]");
-                stream.WriteLine("TIMEBASE=1/1000");
-                stream.WriteLine($"START={start}");
-                stream.WriteLine($"END={end}");
-                stream.WriteLine($"title={Path.GetFileNameWithoutExtension(file)}");
-                stream.WriteLine("");
-
-                start = end + 1;
-            }
-        }
-
-        await EnsureInitializedAsync(progress, cancellationToken).ConfigureAwait(false);
-        _ = await FFMpegArguments
-            .FromConcatInput(files)
-            .AddFileInput(chaptersFile)
-            .OutputToFile(outputFile.FullName, true)
-            .ProcessAsynchronously()
-            .ConfigureAwait(false);
-    }
-
-    public async Task InitializeAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
-    {
-        using var state = progress.Start("FFmpeg", StageType.Installing);
-        Process process = new();
-        process.StartInfo.FileName = "cmd.exe";
-        process.StartInfo.Arguments = "/c winget install ffmpeg --accept-source-agreements";
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.CreateNoWindow = true;
-        _ = process.Start();
-        await process.WaitForExitAsync(cancellationToken);
-    }
-
-    private Task EnsureInitializedAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken) => initializeTask ??= InitializeAsync(progress, cancellationToken);
-}
-
-public class LocalAudioSynthesizer(ILogger<LocalAudioSynthesizer> logger) : IAudioSynthesizer
-{
-    private readonly SpeechSynthesizer _speechSynthesizer = new();
-
-    public IEnumerable<VoiceInfo> GetVoices() => _speechSynthesizer.GetInstalledVoices().Select(voice => voice.VoiceInfo);
-
-    public void Speak(string text, VoiceInfo voice)
-    {
-        var builder = new PromptBuilder(voice.Culture);
-        builder.AppendText(text);
-        _speechSynthesizer.SelectVoice(voice.Name);
-        _speechSynthesizer.SpeakAsyncCancelAll();
-        _ = _speechSynthesizer.SpeakAsync(builder);
-    }
-
-    public void StopSpeaking() => _speechSynthesizer.SpeakAsyncCancelAll();
-
-    public Task<Stream> SynthesizeWavFromTextAsync(
-        string name,
-        string content,
-        VoiceInfo voice,
-        IProgress<ProgressUpdate> progress,
-        CancellationToken cancellationToken)
-    {
-        using var state = progress.Start(name, StageType.ConvertTextToWav);
-        try
-        {
-            logger.LogInformation($"Starting for {name}", ConsoleColor.Yellow);
-            var builder = new PromptBuilder(voice.Culture);
-            builder.AppendText(content);
-            _speechSynthesizer.SelectVoice(voice.Name);
-
-            var speechStream = new MemoryStream();
-            _speechSynthesizer.SetOutputToWaveStream(speechStream);
-            _speechSynthesizer.Speak(builder);
-            speechStream.Position = 0;
-
-            logger.LogInformation($"Succeeded for {name}", ConsoleColor.Green);
-
-            return Task.FromResult<Stream>(speechStream);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError($"Failed for {name} with ex: {ex}", ConsoleColor.Red);
-            return Task.FromResult(Stream.Null);
-        }
-    }
-}
-
 public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> logger) : IHtmlConverter
 {
-    public Task<(string Title, string Content)> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
+    public Task<HtmlTextConversionResult> HtmlToPlaineTextAsync(string htmlContent, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // title can't be self closing tag in order for parsing to work, but epub allos it
         // TODO: it would be nice to have nicer workaround, but this may require using diffirent way of converting.
         var selfClosingRegex = new Regex(@"<title\b[^>]*\s*\/>");
@@ -249,19 +172,26 @@ public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> 
         HtmlDocument htmlDocument = new();
         htmlDocument.LoadHtml(htmlContent);
 
+        var imageReferences = new List<HtmlImageReference>();
         var images = htmlDocument.DocumentNode.SelectNodes("//img");
         if (images != null)
         {
-            var replaceNodes = htmlDocument.DocumentNode.SelectNodes("//img")?.Select(img =>
+            for (var imageIndex = 0; imageIndex < images.Count; imageIndex++)
             {
-                var altText = img.Attributes["alt"]?.Value ?? string.Empty;
-                var fileName = img.Attributes["src"].Value.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Last();
-                return (Original: img, Replacement: HtmlTextNode.CreateNode($"book image: {altText} file name {fileName}"));
-            }) ?? [];
+                var image = images[imageIndex];
+                if (image == null)
+                {
+                    continue;
+                }
 
-            foreach (var (original, replacement) in replaceNodes)
-            {
-                _ = original.ParentNode.ReplaceChild(replacement, original);
+                var source = (HtmlEntity.DeEntitize(image.GetAttributeValue("src", string.Empty)) ?? string.Empty).Trim();
+                var altText = (HtmlEntity.DeEntitize(image.GetAttributeValue("alt", string.Empty)) ?? string.Empty).Trim();
+                var placeholder = $"[[_epub_image_{imageIndex:0000}_]]";
+                imageReferences.Add(new(
+                    placeholder,
+                    source,
+                    string.IsNullOrWhiteSpace(altText) ? null : altText));
+                _ = image.ParentNode.ReplaceChild(HtmlTextNode.CreateNode(placeholder), image);
             }
         }
 
@@ -276,7 +206,7 @@ public class HtmlAgilityPackHtmlConverter(ILogger<HtmlAgilityPackHtmlConverter> 
 
         var title = GetText(htmlDocument, "//title//text()");
         var content = GetText(htmlDocument, "//body//text()");  // if we use //body//text() then title chapter won't be anounced during narration 
-        return Task.FromResult((title, content));
+        return Task.FromResult(new HtmlTextConversionResult(title, content, [.. imageReferences]));
     }
 }
 
@@ -313,15 +243,61 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
         using var stream = fileInfo.OpenRead();
         var book = EpubReader.ReadBook(stream, options);
 
+        var images = book.Content.Images.Local.Select(ConvertImage).ToArray();
+        var imagesByPath = new Dictionary<string, BookImage>(StringComparer.OrdinalIgnoreCase);
+        foreach (var image in images)
+        {
+            if (image.SourcePath != null && !imagesByPath.TryAdd(image.SourcePath, image))
+            {
+                logger.LogWarning("Multiple EPUB images resolve to source path {SourcePath}.", image.SourcePath);
+            }
+        }
+
         var chapterMapping = CollectChapterNames(book);
 
-        var chapters = book.ReadingOrder.Select(c => new Chapter(c.FilePath, chapterMapping.GetValueOrDefault(c.FilePath, ""), c.Content));
+        var chapters = book.ReadingOrder.Select(c => new RawChapter(
+            c.FilePath,
+            chapterMapping.GetValueOrDefault(c.FilePath, ""),
+            c.Content));
 
         var convertTask = chapters
             .Where(chapters => !string.IsNullOrWhiteSpace(chapters.Content))
-            .Select(chapter => ChapterToPlainTextAsync(chapter, cancellationToken));
+            .Select(chapter => ChapterToPlainTextAsync(chapter, imagesByPath, cancellationToken));
 
         var plainTextChapters = await Task.WhenAll(convertTask).ConfigureAwait(false);
+        var altTextByImageId = plainTextChapters
+            .SelectMany(static chapter => chapter.ImageOccurrences)
+            .Where(static occurrence => occurrence.ImageId != null && !string.IsNullOrWhiteSpace(occurrence.OriginalAltText))
+            .GroupBy(static occurrence => occurrence.ImageId!, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group
+                    .Select(static occurrence => occurrence.OriginalAltText!)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+
+        images = [.. images.Select(image =>
+        {
+            var altTexts = altTextByImageId.GetValueOrDefault(image.Id) ?? [];
+            if (altTexts.Length > 1)
+            {
+                logger.LogWarning(
+                    "Image {ImagePath} has {AltTextCount} different EPUB alt texts; preserving all and using the first as approved.",
+                    image.SourcePath,
+                    altTexts.Length);
+            }
+
+            return image with
+            {
+                SourceAltTexts = altTexts,
+                ApprovedDescription = altTexts.FirstOrDefault(),
+                DescriptionOrigin = altTexts.Length == 0
+                    ? ImageDescriptionOrigin.None
+                    : ImageDescriptionOrigin.EpubAltText
+            };
+        })];
+
         return new Book(
             Path.GetFileNameWithoutExtension(fileInfo.Name),
             book.Title,
@@ -329,7 +305,8 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
             book.AuthorList,
             book.CoverImage,
             plainTextChapters.Where(chapter => !string.IsNullOrEmpty(chapter.Content)).Select(ConvertChapter).ToArray(),
-            book.Content.Images.Local.Select(ConvertImage).ToArray());
+            images,
+            book.Schema.Package.Metadata.Languages.FirstOrDefault()?.Language);
     }
 
     private Dictionary<string, string> CollectChapterNames(EpubBook book)
@@ -362,36 +339,83 @@ public class VersOneEpubBookParser(IHtmlConverter converter, ILogger<VersOneEpub
         return mapping;
     }
 
-    private async Task<Chapter> ChapterToPlainTextAsync(Chapter chapter, CancellationToken cancellationToken)
+    private async Task<Chapter> ChapterToPlainTextAsync(
+        RawChapter chapter,
+        IReadOnlyDictionary<string, BookImage> imagesByPath,
+        CancellationToken cancellationToken)
     {
-        var (parsedTitle, content) = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
-        var fileName = Path.GetFileNameWithoutExtension(chapter.FileName);
+        var conversion = await converter.HtmlToPlaineTextAsync(chapter.Content, cancellationToken).ConfigureAwait(false);
+        var content = conversion.Content;
+        var normalizedChapterPath = EpubImagePath.Normalize(chapter.FilePath);
+        var occurrences = new List<BookImageOccurrence>(conversion.Images.Length);
+
+        for (var imageIndex = 0; imageIndex < conversion.Images.Length; imageIndex++)
+        {
+            var reference = conversion.Images[imageIndex];
+            var resolvedPath = EpubImagePath.Resolve(chapter.FilePath, reference.Source);
+            BookImage? image = null;
+            if (resolvedPath != null && !imagesByPath.TryGetValue(resolvedPath, out image))
+            {
+                logger.LogWarning(
+                    "Chapter image source {ImageSource} resolved to {ResolvedPath}, but no matching EPUB image was found.",
+                    reference.Source,
+                    resolvedPath);
+            }
+
+            var occurrenceId = BookImageIdentity.CreateOccurrenceId(normalizedChapterPath, imageIndex);
+            occurrences.Add(new(occurrenceId, image?.Id, reference.Source, reference.AltText));
+            content = content.Replace(
+                reference.Placeholder,
+                ImageNarrationMarker.Create(occurrenceId),
+                StringComparison.Ordinal);
+        }
+
+        var fileName = Path.GetFileNameWithoutExtension(chapter.FilePath);
         var title = string.IsNullOrEmpty(chapter.Title)
-            ? string.IsNullOrEmpty(parsedTitle)
+            ? string.IsNullOrEmpty(conversion.Title)
                 ? fileName
-                : parsedTitle
+                : conversion.Title
             : chapter.Title;
 
-        return new Chapter(fileName, title, content);
+        return new Chapter(fileName, title, content, [.. occurrences]);
     }
 
     private static BookChapter ConvertChapter(Chapter chapter, int index) =>
         new BookChapter(
            $"{(index + 1):0000} {chapter.FileName}", // TODO: do we need to add index here and in images?
             chapter.Title,
-            chapter.Content);
+           chapter.Content,
+           chapter.ImageOccurrences);
 
     private static BookImage ConvertImage(EpubLocalByteContentFile imageFile, int index) =>
         new BookImage(
-            $"{(index + 1):0000} {Path.GetFileName(imageFile.FilePath)}",
-            imageFile.Content);
+           $"{(index + 1):0000} {Path.GetFileName(imageFile.FilePath)}",
+           imageFile.Content)
+        {
+           SourcePath = EpubImagePath.Normalize(imageFile.FilePath),
+           Id = BookImageIdentity.CreateSourceId(EpubImagePath.Normalize(imageFile.FilePath))
+        };
 
-    private readonly record struct Chapter(string FileName, string Title, string Content);
+    private readonly record struct RawChapter(string FilePath, string Title, string Content);
+
+    private readonly record struct Chapter(
+        string FileName,
+        string Title,
+        string Content,
+        BookImageOccurrence[] ImageOccurrences);
 }
 
 public sealed class BookConverter(
     IEpubBookParser bookParser,
     IAudioSynthesizer synthesizer,
+    IAudioPreviewService previewService,
+    ITtsSettingsStore ttsSettings,
+    IVisionSettingsStore visionSettings,
+    IImageDescriptionService imageDescriptions,
+    IImageDescriptionWorkflow imageDescriptionWorkflow,
+    IImageDescriptionProjectStore imageDescriptionProjects,
+    ITextChunker textChunker,
+    IImageNarrationRenderer narrationRenderer,
     IAudioConverter audioConverter,
     ILogger<BookConverter> logger)
 {
@@ -399,23 +423,116 @@ public sealed class BookConverter(
 
     public IAudioSynthesizer Synthesizer { get; } = synthesizer;
 
+    public IAudioPreviewService Preview { get; } = previewService;
+
+    public ITtsSettingsStore TtsSettingsStore { get; } = ttsSettings;
+
+    public IVisionSettingsStore VisionSettingsStore { get; } = visionSettings;
+
+    public IImageDescriptionService ImageDescriptions { get; } = imageDescriptions;
+
+    public IImageDescriptionWorkflow ImageDescriptionWorkflow { get; } = imageDescriptionWorkflow;
+
+    public IImageDescriptionProjectStore ImageDescriptionProjects { get; } = imageDescriptionProjects;
+
+    public IImageNarrationRenderer NarrationRenderer { get; } = narrationRenderer;
+
     public async Task ConvertAsync(
-        VoiceInfo voice,
+        SpeechVoice voice,
         Book book,
         FileInfo output,
         DirectoryInfo tmpFileDir,
         IProgress<ProgressUpdate> progress,
         CancellationToken cancellationToken)
     {
-        var bookOutDir = tmpFileDir.CreateSubdirectory(Path.GetFileNameWithoutExtension(book.FileName));
+        var emptyChapter = book.Chapters.FirstOrDefault(static chapter => string.IsNullOrWhiteSpace(chapter.Content));
+        if (emptyChapter != null)
+        {
+            throw new InvalidOperationException(
+                $"Chapter '{emptyChapter.Name}' has no narration text. Add chapter text before generating the audiobook.");
+        }
+
+        var synthesisSession = await Synthesizer.CreateSessionAsync(voice, cancellationToken);
+        var bookOutDir = tmpFileDir.CreateSubdirectory($".audiobookgenerator-{Guid.NewGuid():N}");
+        try
+        {
+            await ConvertCoreAsync(synthesisSession, book, output, bookOutDir, progress, cancellationToken);
+        }
+        finally
+        {
+            if (bookOutDir.Exists)
+            {
+                bookOutDir.Delete(recursive: true);
+            }
+        }
+    }
+
+    private async Task ConvertCoreAsync(
+        IAudioSynthesisSession synthesisSession,
+        Book book,
+        FileInfo output,
+        DirectoryInfo bookOutDir,
+        IProgress<ProgressUpdate> progress,
+        CancellationToken cancellationToken)
+    {
+        var wavDir = bookOutDir.CreateSubdirectory("wav");
         var aacDir = bookOutDir.CreateSubdirectory("aac");
         var imageDir = bookOutDir.CreateSubdirectory("images");
+        var producedAudioChapters = new List<AudioChapter>(book.Chapters.Length);
 
         foreach (var chapter in book.Chapters)
         {
-            Stream? stream = await Synthesizer.SynthesizeWavFromTextAsync(chapter.Name, chapter.Content, voice, progress, cancellationToken);
+            var narrationContent = NarrationRenderer.Render(
+                chapter,
+                book.Images,
+                ImageNarrationFallback.ForLanguage(book.Language));
+            if (string.IsNullOrWhiteSpace(narrationContent))
+            {
+                continue;
+            }
+
+            List<FileInfo> chapterWavFiles;
+            progress.Report(new(chapter.Name, StageType.ConvertTextToWav, Progress.Started));
+            try
+            {
+                var chunks = textChunker.Split(narrationContent, synthesisSession.MaximumInputCharacters);
+                chapterWavFiles = new List<FileInfo>(chunks.Count);
+
+                for (var chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await using var stream = await synthesisSession.SynthesizeWavAsync(chunks[chunkIndex], cancellationToken);
+                    var wavFile = wavDir.GetSubFile($"{chapter.FileName}.{chunkIndex + 1:0000}.wav");
+                    await using (var outputStream = new FileStream(
+                        wavFile.FullName,
+                        FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 81920,
+                        FileOptions.Asynchronous))
+                    {
+                        await stream.CopyToAsync(outputStream, cancellationToken);
+                    }
+
+                    if (wavFile.Length == 0)
+                    {
+                        throw new InvalidDataException($"TTS provider returned empty audio for chapter '{chapter.Name}', chunk {chunkIndex + 1}.");
+                    }
+
+                    chapterWavFiles.Add(wavFile);
+                }
+
+            }
+            catch
+            {
+                progress.Report(new(chapter.Name, StageType.ConvertTextToWav, Progress.Failed));
+                throw;
+            }
+
+            progress.Report(new(chapter.Name, StageType.ConvertTextToWav, Progress.Done));
             var chapterAacOutput = aacDir.GetSubFile($"{chapter.FileName}.aac");
-            await audioConverter.ConvertWavToAacAsync(stream, chapterAacOutput, progress, cancellationToken); // TODO: consider passing Name, for better reporting
+            await audioConverter.ConvertWavToAacAsync(chapterWavFiles, chapterAacOutput, progress, cancellationToken);
+            producedAudioChapters.Add(new AudioChapter(chapterAacOutput, chapter.Name));
         }
 
         foreach (var image in book.Images)
@@ -429,7 +546,11 @@ public sealed class BookConverter(
         }
 
         logger.LogInformation("Joining");
-        await audioConverter.CreateM4bAsync(aacDir.GetFiles(), output, progress, cancellationToken);
+        await audioConverter.CreateM4bAsync(
+            producedAudioChapters,
+            output,
+            progress,
+            cancellationToken);
         logger.LogInformation("Done joining");
 
         logger.LogInformation($"Adding cover image");
@@ -442,10 +563,38 @@ public sealed class BookConverter(
     public async Task ConvertAsync(FileInfo input, DirectoryInfo output, string language, IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
         var book = await Parser.ParseAsync(input, cancellationToken);
-        var voice = Synthesizer.GetVoices().Single(v => v.Gender == VoiceGender.Female && v.Culture.Name == language);
+        var voice = await ResolveLegacyVoiceAsync(language, cancellationToken);
         var bookFile = output.GetSubFile($"{book.FileName}.m4b");
 
         await ConvertAsync(voice, book, bookFile, output, progress, cancellationToken);
+    }
+
+    private async Task<SpeechVoice> ResolveLegacyVoiceAsync(string language, CancellationToken cancellationToken)
+    {
+#if AUDIOBOOKGENERATOR_WINDOWS_CORE
+        var windowsVoices = await Synthesizer.GetVoicesAsync(TtsSettings.WindowsProviderId, cancellationToken);
+        return windowsVoices.FirstOrDefault(voice =>
+            string.Equals(voice.Gender, "Female", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(voice.Culture, language, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"No female voice for language '{language}' was found in provider '{TtsSettings.WindowsProviderId}'.");
+#else
+        var providerId = await Synthesizer.GetDefaultProviderIdAsync(cancellationToken);
+        var voices = await Synthesizer.GetVoicesAsync(providerId, cancellationToken);
+        if (voices.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Default TTS provider '{providerId}' does not have any configured voices. Configure at least one voice or use the voice-based ConvertAsync overload.");
+        }
+
+        return voices.FirstOrDefault(voice =>
+            string.Equals(voice.Gender, "Female", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(voice.Culture, language, StringComparison.OrdinalIgnoreCase))
+            ?? voices.FirstOrDefault(voice =>
+                string.Equals(voice.Culture, language, StringComparison.OrdinalIgnoreCase))
+            ?? voices.FirstOrDefault(voice =>
+                string.Equals(voice.Gender, "Female", StringComparison.OrdinalIgnoreCase))
+            ?? voices[0];
+#endif
     }
 }
 

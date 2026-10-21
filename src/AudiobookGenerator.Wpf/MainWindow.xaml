@@ -4,7 +4,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:YewCone.AudiobookGenerator.Wpf"
-        xmlns:speech="clr-namespace:System.Speech.Synthesis;assembly=System.Speech"
         xmlns:core="clr-namespace:YewCone.AudiobookGenerator.Core;assembly=YewCone.AudiobookGenerator.Core"
         xmlns:viewModels="clr-namespace:YewCone.AudiobookGenerator.Wpf.ViewModels"
         mc:Ignorable="d"
@@ -27,10 +26,20 @@
         <DataTemplate DataType="{x:Type core:BookImage}">
             <TextBlock Text="{Binding FileName}" />
         </DataTemplate>
-        <DataTemplate DataType="{x:Type speech:VoiceInfo}">
+        <DataTemplate DataType="{x:Type core:SpeechProviderInfo}">
+            <TextBlock>
+                <Run Text="{Binding DisplayName, Mode=OneTime}" />
+                <Run Text=" [" />
+                <Run Text="{Binding Id, Mode=OneTime}" />
+                <Run Text="]" />
+            </TextBlock>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type core:SpeechVoice}">
             <TextBlock>
                 <Run Text="{Binding Name, Mode=OneTime}" />
-                <Run Text="(" />
+                <Run Text=" [" />
+                <Run Text="{Binding Id, Mode=OneTime}" />
+                <Run Text="] (" />
                 <Run Text="{Binding Culture, Mode=OneTime}" />
                 <Run Text=", " />
                 <Run Text="{Binding Gender, Mode=OneTime}" />
@@ -85,6 +94,13 @@
                             <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE90B;"/>
                     </TextBlock>
                 </Button>
+                <Button DockPanel.Dock="Top"
+                        Margin="0 0 5 0"
+                        VerticalAlignment="Stretch"
+                        HorizontalAlignment="Right"
+                        Command="{Binding CancelGenerationCommand, Mode=OneTime}"
+                        Content="{x:Static local:Resources.CancelGenerationLabel}"
+                        Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <TextBlock DockPanel.Dock="Bottom"
                         Visibility="{Binding IsGenerating, Converter={StaticResource BooleanToVisibilityConverter}}"
                         Text="{Binding ProgressMessage, Mode=OneWay}"/>
@@ -95,14 +111,12 @@
             <DockPanel
                 DockPanel.Dock="Bottom"
                 LastChildFill="True">
-                <TextBlock
+                <Button
                     Margin="5 0"
                     DockPanel.Dock="Right"
-                    VerticalAlignment="Center">
-                    <Hyperlink Command="{Binding ShowHowToAddVoiceCommand, Mode=OneTime}">
-                        <Run Text="{x:Static local:Resources.AddVoiceLable}"/>
-                    </Hyperlink>
-                </TextBlock>
+                    Click="HandleTtsSettingsClick"
+                    Content="{x:Static local:Resources.TtsSettingsLabel}"
+                    IsEnabled="{Binding CanConfigureSpeech}" />
                 <Button DockPanel.Dock="Right"
                     Command="{Binding PlayOrStopCommand, Mode=OneTime}" 
                     Visibility="{Binding IsVoiceSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -113,68 +127,199 @@
                 <TextBlock
                     DockPanel.Dock="Left"
                     VerticalAlignment="Center"
+                    Text="{x:Static local:Resources.ProviderLabel}"/>
+                <ComboBox
+                    DockPanel.Dock="Left"
+                    MinWidth="150"
+                    Margin="5 0"
+                    IsEnabled="{Binding CanConfigureSpeech}"
+                    ItemsSource="{Binding Providers, Mode=OneTime}"
+                    SelectedItem="{Binding SelectedProvider, Mode=TwoWay}"/>
+                <TextBlock
+                    DockPanel.Dock="Left"
+                    Margin="5 0 0 0"
+                    VerticalAlignment="Center"
                     Text="{x:Static local:Resources.SelectVoiceLable}"/>
                 <ComboBox
                     DockPanel.Dock="Left"
                     Margin="5 0"
                     HorizontalAlignment="Stretch"
+                    IsEnabled="{Binding CanConfigureSpeech}"
                     Text="{x:Static local:Resources.VoicePlaceholder}"
                     ItemsSource="{Binding Voices, Mode=OneTime}" SelectedItem="{Binding SelectedVoice}"/>
             </DockPanel>
             <TabControl
+                x:Name="MainTabs"
                 Margin="0 5"
                 DockPanel.Dock="Top">
                 <TabItem Header="{Binding TextContentSectionHeader, Mode=OneWay}" >
                     <Grid Margin="3">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="180" MinWidth="100"/>
+                            <ColumnDefinition Width="5"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <ListBox
+                            x:Name="ChapterList"
                             Grid.Column="0"
+                            AutomationProperties.AutomationId="ChapterList"
                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                             ScrollViewer.VerticalScrollBarVisibility="Auto" 
                             ItemsSource="{Binding Book.Chapters}"
                             SelectedItem="{Binding Book.SelectedChapter}"/>
-                        <GridSplitter Grid.Row="1" Width="5" VerticalAlignment="Stretch" />
-                            <ScrollViewer
-                                Grid.Column="2"
-                                VerticalScrollBarVisibility="Auto"
-                                HorizontalScrollBarVisibility="Disabled">
-                                <TextBox Grid.Column="2"
-                                    AllowDrop="True"
-                                    PreviewDragOver="HandleDragOver"
-                                    Drop="HandleDrop"
-                                    Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
-                                    TextWrapping="Wrap" />
+                        <GridSplitter
+                            x:Name="ChapterColumnSplitter"
+                            Grid.Column="1"
+                            AutomationProperties.AutomationId="ChapterColumnSplitter"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch"
+                            ResizeBehavior="PreviousAndNext"
+                            ResizeDirection="Columns"
+                            Cursor="SizeWE"/>
+                        <ScrollViewer
+                            Grid.Column="2"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled">
+                            <TextBox
+                                AllowDrop="True"
+                                PreviewDragOver="HandleDragOver"
+                                Drop="HandleDrop"
+                                IsEnabled="{Binding CanEditBook}"
+                                Text="{Binding Book.SelectedChapter.Content, Mode=TwoWay}"
+                                TextWrapping="Wrap" />
                         </ScrollViewer>
                     </Grid>
                 </TabItem>
                 <TabItem Header="{Binding ImagesSectionHeader, Mode=OneWay}">
-                    <DockPanel Margin="3">
-                        <DockPanel DockPanel.Dock="Top">
-                            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="Cover Image"/>
-                            <Button DockPanel.Dock="Right" Command="{Binding AddImageCommand, Mode=OneTime}" >
-                                <TextBlock>
-                                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE710;"/>
-                                    <Run Text="{x:Static local:Resources.AddImageLable}"/>
-                                </TextBlock>
-                            </Button>
-                            <Button Margin="0 0 5 0"  DockPanel.Dock="Right" Command="{Binding SaveImageAsCommand, Mode=OneTime}" >
-                                <TextBlock>
-                                    <Run FontFamily="{StaticResource SymbolThemeFontFamily}" Text="&#xE78C;"/>
-                                    <Run Text="{x:Static local:Resources.SaveImageAsLable}"/>
-                                </TextBlock>
-                            </Button>
-                            <ComboBox Margin="5 0" ItemsSource="{Binding Book.Images}" SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                    <Grid Margin="3">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="0 0 0 6">
+                            <TextBlock Margin="0 0 4 0" VerticalAlignment="Center" Text="{x:Static local:Resources.VisionModelLabel}"/>
+                            <ComboBox Width="180"
+                                      Margin="0 0 5 0"
+                                      DisplayMemberPath="DisplayName"
+                                      ItemsSource="{Binding VisionProfiles}"
+                                      SelectedItem="{Binding SelectedVisionProfile}"
+                                      IsEnabled="{Binding CanConfigureVision}"/>
+                            <Button Margin="0 0 5 0"
+                                    Click="HandleVisionSettingsClick"
+                                    IsEnabled="{Binding CanConfigureVision}"
+                                    Content="{x:Static local:Resources.VisionSettingsLabel}"/>
+                            <Button Margin="0 0 5 0"
+                                    Command="{Binding GenerateMissingImageDescriptionsCommand}"
+                                    Content="{x:Static local:Resources.GenerateMissingDescriptionsLabel}"/>
+                            <Button Margin="0 0 5 0"
+                                    Command="{Binding CancelImageDescriptionGenerationCommand}"
+                                    Visibility="{Binding IsGeneratingImageDescriptions, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Content="Cancel"/>
+                            <Button Command="{Binding SaveDescriptionProjectCommand}"
+                                    Content="{x:Static local:Resources.SaveProjectAsLabel}"/>
+                        </WrapPanel>
+
+                        <DockPanel Grid.Row="1" Grid.Column="0">
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0 6 0 0">
+                                <TextBlock Text="Cover image"/>
+                                <ComboBox IsEnabled="{Binding CanEditBook}"
+                                          ItemsSource="{Binding Book.Images}"
+                                          SelectedItem="{Binding Book.Cover, Mode=TwoWay}"/>
+                                <StackPanel Margin="0 5 0 0" Orientation="Horizontal">
+                                    <Button Margin="0 0 5 0" Command="{Binding AddImageCommand}" Content="{x:Static local:Resources.AddImageLable}"/>
+                                    <Button Command="{Binding SaveImageAsCommand}" Content="{x:Static local:Resources.SaveImageAsLable}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Book.Images}"
+                                     SelectedItem="{Binding SelectedImage, Mode=TwoWay}"/>
                         </DockPanel>
-                        <Image Source="{Binding Book.Cover.Content, Mode=OneWay}" Stretch="Uniform" />
-                    </DockPanel>
+
+                        <Grid Grid.Row="1" Grid.Column="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="3*"/>
+                                <RowDefinition Height="5"/>
+                                <RowDefinition Height="2*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <Image x:Name="SelectedImagePreview"
+                                       Source="{Binding SelectedImage.Content}"
+                                       HorizontalAlignment="Stretch"
+                                       VerticalAlignment="Stretch"
+                                       Stretch="Uniform"
+                                       StretchDirection="Both"/>
+                            </Border>
+                            <GridSplitter Grid.Row="1"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          ResizeBehavior="PreviousAndNext"
+                                          ResizeDirection="Rows"
+                                          Cursor="SizeNS"/>
+                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                <TextBlock Margin="0 5 0 0"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding SelectedImage.FileName}"/>
+                                <TextBlock Text="{Binding SelectedImageDescriptionStatus}"/>
+                                <TextBlock Margin="0 0 0 6">
+                                    <Run Text="Chapter references: "/>
+                                    <Run Text="{Binding SelectedImageReferenceCount, Mode=OneWay}"/>
+                                </TextBlock>
+
+                                <TextBlock FontWeight="SemiBold" Text="{x:Static local:Resources.ApprovedNarrationLabel}"/>
+                                <TextBox MinHeight="65"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         Text="{Binding ApprovedImageDescriptionDraft, UpdateSourceTrigger=PropertyChanged}"/>
+                                <WrapPanel Margin="0 5 0 8">
+                                    <Button Margin="0 0 5 0"
+                                            Command="{Binding SaveApprovedImageDescriptionCommand}"
+                                            Content="Save description"/>
+                                    <Button Margin="0 0 5 0"
+                                            Command="{Binding GenerateSelectedImageDescriptionCommand}"
+                                            Content="Generate / regenerate"/>
+                                    <Button Margin="0 0 5 0"
+                                            Command="{Binding ToggleDecorativeImageCommand}"
+                                            Content="Toggle decorative"/>
+                                    <Button Command="{Binding RestoreImageAltTextCommand}"
+                                            Content="Restore EPUB alt"/>
+                                </WrapPanel>
+
+                                <StackPanel Visibility="{Binding HasCandidateImageDescription, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock FontWeight="SemiBold" Text="{x:Static local:Resources.GeneratedCandidateLabel}"/>
+                                    <TextBox MinHeight="65"
+                                             TextWrapping="Wrap"
+                                             Text="{Binding CandidateImageDescriptionDraft, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <WrapPanel Margin="0 5 0 0">
+                                        <Button Margin="0 0 5 0"
+                                                Command="{Binding ApproveImageDescriptionCommand}"
+                                                Content="Approve"/>
+                                        <Button Command="{Binding RejectImageDescriptionCommand}"
+                                                Content="Reject"/>
+                                    </WrapPanel>
+                                </StackPanel>
+
+                                <TextBlock Margin="0 8 0 0"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding ImageDescriptionProgress}"/>
+                                <TextBlock Margin="0 4 0 0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="{x:Static local:Resources.ImagePrivacyNotice}"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Grid>
                 </TabItem>
                 <TabItem Header="{x:Static local:Resources.DetailsSectionHeader}" >
                     <DataGrid 
                     Margin="3"
+                    IsEnabled="{Binding CanEditBook}"
                     ItemsSource="{Binding Book.Properties, Mode=OneWay}"
                     AutoGenerateColumns="False">
                         <DataGrid.Columns>

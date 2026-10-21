@@ -1,5 +1,3 @@
-using System.Speech.Synthesis;
-
 using Spectre.Console;
 
 using YewCone.AudiobookGenerator.Console.Models;
@@ -16,7 +14,7 @@ internal sealed class AudioPreviewer
     /// <summary>
     /// Runs the audio preview menu.
     /// </summary>
-    public async Task RunAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
+    public async Task RunAsync(BookEditSession session, BookConverter converter, CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderPreviewAudio}[/]").LeftJustified());
@@ -51,20 +49,20 @@ internal sealed class AudioPreviewer
 
             if (choice == Strings.MenuBackToMainMenu)
             {
-                synthesizer.StopSpeaking();
+                converter.Preview.Stop();
                 return;
             }
 
             if (choice == Strings.MenuStopPlayback)
             {
-                synthesizer.StopSpeaking();
+                converter.Preview.Stop();
                 AnsiConsole.MarkupLine($"[dim]{Strings.StatusPlaybackStopped}[/]");
                 continue;
             }
 
             if (choice == Strings.MenuPreviewCustomText)
             {
-                await PreviewCustomTextAsync(session, synthesizer, cancellationToken);
+                await PreviewCustomTextAsync(session, converter.Preview, cancellationToken);
                 continue;
             }
 
@@ -72,11 +70,15 @@ internal sealed class AudioPreviewer
             var chapterIndex = int.Parse(choice.Split('.')[0]) - 1;
             var chapter = chapters[chapterIndex];
 
-            await PreviewChapterAsync(session, synthesizer, chapter, cancellationToken);
+            await PreviewChapterAsync(session, converter, chapter, cancellationToken);
         }
     }
 
-    private static async Task PreviewChapterAsync(BookEditSession session, IAudioSynthesizer synthesizer, BookChapter chapter, CancellationToken cancellationToken)
+    private static async Task PreviewChapterAsync(
+        BookEditSession session,
+        BookConverter converter,
+        BookChapter chapter,
+        CancellationToken cancellationToken)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"[blue]{string.Format(Strings.StatusPreviewing, Markup.Escape(chapter.Name))}[/]");
@@ -98,16 +100,20 @@ internal sealed class AudioPreviewer
             return;
         }
 
+        var narrationContent = converter.NarrationRenderer.Render(
+            chapter,
+            session.Images,
+            ImageNarrationFallback.ForLanguage(session.Language));
         var textToSpeak = previewLength == Strings.MenuFirst500Chars
-            ? TruncateAtSentence(chapter.Content, 500)
+            ? TruncateAtSentence(narrationContent, 500)
             : previewLength == Strings.MenuFirst2000Chars
-                ? TruncateAtSentence(chapter.Content, 2000)
-                : chapter.Content;
+                ? TruncateAtSentence(narrationContent, 2000)
+                : narrationContent;
 
-        PlayText(synthesizer, textToSpeak, session.SelectedVoice!);
+        await PlayTextAsync(converter.Preview, textToSpeak, session.SelectedVoice!, cancellationToken);
     }
 
-    private static async Task PreviewCustomTextAsync(BookEditSession session, IAudioSynthesizer synthesizer, CancellationToken cancellationToken)
+    private static async Task PreviewCustomTextAsync(BookEditSession session, IAudioPreviewService preview, CancellationToken cancellationToken)
     {
         var text = await AnsiConsole.PromptAsync(
             new TextPrompt<string>(Strings.PromptEnterTextToPreview)
@@ -116,20 +122,22 @@ internal sealed class AudioPreviewer
                     : ValidationResult.Error(Strings.ErrorTextEmpty)),
             cancellationToken);
 
-        PlayText(synthesizer, text, session.SelectedVoice!);
+        await PlayTextAsync(preview, text, session.SelectedVoice!, cancellationToken);
     }
 
-    private static void PlayText(IAudioSynthesizer synthesizer, string text, VoiceInfo voice)
+    private static async Task PlayTextAsync(
+        IAudioPreviewService preview,
+        string text,
+        SpeechVoice voice,
+        CancellationToken cancellationToken)
     {
-        // Stop any current playback
-        synthesizer.StopSpeaking();
+        preview.Stop();
 
         AnsiConsole.MarkupLine($"[dim]{Strings.StatusPlayingAudio}[/]");
 
-        // Start speaking (runs in background)
         try
         {
-            synthesizer.Speak(text, voice);
+            await preview.PlayAsync(text, voice, cancellationToken);
         }
         catch (Exception ex)
         {

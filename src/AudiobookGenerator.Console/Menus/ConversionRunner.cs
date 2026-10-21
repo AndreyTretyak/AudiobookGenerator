@@ -16,7 +16,12 @@ internal sealed class ConversionRunner
     /// <summary>
     /// Runs the conversion workflow.
     /// </summary>
-    public async Task RunAsync(BookEditSession session, BookConverter converter, CancellationToken cancellationToken)
+    public async Task<bool> RunAsync(
+        BookEditSession session,
+        BookConverter converter,
+        CancellationToken cancellationToken,
+        DirectoryInfo? requestedOutputDirectory = null,
+        bool assumeYes = false)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule($"[yellow]{Strings.HeaderGenerateAudiobook}[/]").LeftJustified());
@@ -25,27 +30,34 @@ internal sealed class ConversionRunner
         if (session.SelectedVoice == null)
         {
             AnsiConsole.MarkupLine($"[red]{Strings.ErrorNoVoiceSelected}[/]");
-            return;
+            return false;
         }
 
-        // Prompt for output directory
-        var outputPath = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>(Strings.PromptOutputDirectory)
-                .DefaultValue(Environment.GetFolderPath(Environment.SpecialFolder.Desktop))
-                .Validate(path =>
-                {
-                    var trimmed = path.Trim('\"');
-                    return Directory.Exists(trimmed)
-                        ? ValidationResult.Success()
-                        : ValidationResult.Error(Strings.ErrorDirectoryDoesNotExist);
-                }),
-            cancellationToken);
+        DirectoryInfo outputDir;
+        if (requestedOutputDirectory == null)
+        {
+            var outputPath = await AnsiConsole.PromptAsync(
+                new TextPrompt<string>(Strings.PromptOutputDirectory)
+                    .DefaultValue(Environment.GetFolderPath(Environment.SpecialFolder.Desktop))
+                    .Validate(path =>
+                    {
+                        var trimmed = path.Trim('\"');
+                        return Directory.Exists(trimmed)
+                            ? ValidationResult.Success()
+                            : ValidationResult.Error(Strings.ErrorDirectoryDoesNotExist);
+                    }),
+                cancellationToken);
+            outputDir = new DirectoryInfo(outputPath.Trim('\"'));
+        }
+        else
+        {
+            outputDir = requestedOutputDirectory;
+        }
 
-        var outputDir = new DirectoryInfo(outputPath.Trim('\"'));
         var outputFile = new FileInfo(Path.Combine(outputDir.FullName, $"{session.FileName}.m4b"));
 
         // Check if file exists
-        if (outputFile.Exists)
+        if (outputFile.Exists && !assumeYes)
         {
             var overwrite = await AnsiConsole.PromptAsync(
                 new ConfirmationPrompt(string.Format(Strings.PromptConfirmOverwrite, outputFile.Name)),
@@ -53,7 +65,7 @@ internal sealed class ConversionRunner
 
             if (!overwrite)
             {
-                return;
+                return false;
             }
         }
 
@@ -74,13 +86,13 @@ internal sealed class ConversionRunner
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
 
-        var confirm = await AnsiConsole.PromptAsync(
+        var confirm = assumeYes || await AnsiConsole.PromptAsync(
             new ConfirmationPrompt(Strings.PromptStartConversion),
             cancellationToken);
 
         if (!confirm)
         {
-            return;
+            return false;
         }
 
         AnsiConsole.WriteLine();
@@ -114,19 +126,48 @@ internal sealed class ConversionRunner
                         cancellationToken);
                 });
 
+            if (session.SourceFile != null)
+            {
+                var sidecar = new FileInfo(converter.ImageDescriptionProjects.GetSidecarPath(outputFile));
+                var sidecarResult = await converter.ImageDescriptionProjects.SaveAsync(
+                    sidecar,
+                    session.SourceFile,
+                    book,
+                    session.SelectedVisionProfileId,
+                    cancellationToken);
+                ReportSidecarLimitations(sidecarResult);
+            }
+
             AnsiConsole.WriteLine();
             AnsiConsole.Write(new Rule($"[green]{Strings.StatusConversionComplete}[/]"));
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine($"[green]{Strings.StatusAudiobookSaved}[/] {Markup.Escape(outputFile.FullName)}");
+            return true;
         }
         catch (OperationCanceledException)
         {
             AnsiConsole.MarkupLine($"[yellow]{Strings.StatusConversionCancelled}[/]");
+            return false;
         }
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]{string.Format(Strings.ErrorConversionFailed, Markup.Escape(ex.Message))}[/]");
-            AnsiConsole.WriteException(ex);
+            ExceptionDisplay.Write(ex);
+            return false;
+        }
+    }
+
+    private static void ReportSidecarLimitations(ImageDescriptionProjectSaveResult result)
+    {
+        if (result.SkippedImportedImageCount > 0)
+        {
+            AnsiConsole.MarkupLine(
+                $"[yellow]The sidecar excludes {result.SkippedImportedImageCount} imported image(s); their bytes remain only in this M4B session.[/]");
+        }
+        if (result.CoverSelectionNotPersisted)
+        {
+            AnsiConsole.MarkupLine(
+                "[yellow]The selected cover is an imported image and cannot be restored from the annotation-only sidecar.[/]");
         }
     }
 

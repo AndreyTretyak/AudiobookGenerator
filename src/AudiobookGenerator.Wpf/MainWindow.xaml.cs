@@ -1,5 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
+
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Windows;
@@ -12,30 +12,78 @@ namespace YewCone.AudiobookGenerator.Wpf;
 public partial class MainWindow : Window
 {
     private readonly AudiobookGeneratorViewModel viewModel;
+    private readonly ITtsSettingsStore ttsSettings;
+    private readonly IAudioSynthesizer synthesizer;
+    private readonly IAudioPreviewService preview;
+    private readonly IVisionSettingsStore visionSettings;
+    private readonly IImageDescriptionService imageDescriptions;
 
-    public MainWindow()
+    public MainWindow(
+        BookConverter converter,
+        ILoggerFactory loggerFactory,
+        ITtsSettingsStore ttsSettingsStore,
+        IAudioSynthesizer audioSynthesizer,
+        IAudioPreviewService previewService)
     {
-        DataContext = viewModel = new ServiceCollection()
-            .AddLogging(static p => p.AddEventSourceLogger())
-            .AddBookConverter()
-            .AddTransient<AudiobookGeneratorViewModel>()
-            .BuildServiceProvider(new ServiceProviderOptions() { ValidateOnBuild = true, ValidateScopes = true })
-            .GetRequiredService<AudiobookGeneratorViewModel>();
-
+        DataContext = viewModel = new AudiobookGeneratorViewModel(
+            converter,
+            loggerFactory.CreateLogger<AudiobookGeneratorViewModel>());
+        ttsSettings = ttsSettingsStore;
+        synthesizer = audioSynthesizer;
+        preview = previewService;
+        visionSettings = converter.VisionSettingsStore;
+        imageDescriptions = converter.ImageDescriptions;
         InitializeComponent();
+        Loaded += async (_, _) => await viewModel.InitializeAsync();
     }
 
     private void HandleDragOver(object sender, DragEventArgs e)
     {
-        e.Effects = IsDragSupported(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = viewModel.CanChangeBook && IsDragSupported(e, out _)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
         e.Handled = true;
     }
 
     private async void HandleDrop(object sender, DragEventArgs e)
     {
-        if (IsDragSupported(e, out var file))
+        if (viewModel.CanChangeBook && IsDragSupported(e, out var file))
         {
             await viewModel.OpenBookAsync(file);
+        }
+    }
+
+    private async void HandleTtsSettingsClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new TtsSettingsWindow(ttsSettings, synthesizer, preview)
+        {
+            Owner = this
+        };
+        _ = dialog.ShowDialog();
+        await viewModel.InitializeAsync();
+    }
+
+    private async void HandleVisionSettingsClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new VisionSettingsWindow(
+            visionSettings,
+            imageDescriptions,
+            viewModel.SelectedImage)
+        {
+            Owner = this
+        };
+        _ = dialog.ShowDialog();
+        try
+        {
+            await viewModel.RefreshVisionProfilesAsync();
+        }
+        catch (Exception ex)
+        {
+            _ = MessageBox.Show(
+                ex.Message,
+                "Unable to refresh vision profiles",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 
@@ -44,7 +92,7 @@ public partial class MainWindow : Window
         if (e.Data.GetDataPresent(DataFormats.FileDrop)
             && e.Data.GetData(DataFormats.FileDrop) is string[] files
             && files is [var filePath, ..]
-            && AudiobookGeneratorViewModel.IsEbookExtensionSupported(filePath))
+            && AudiobookGeneratorViewModel.IsBookInputSupported(filePath))
         {
             file = new FileInfo(filePath);
             return true;

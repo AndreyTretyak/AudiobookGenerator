@@ -228,13 +228,13 @@
     <value>Open EPUB in interactive editor</value>
   </data>
   <data name="HelpOutputOption" xml:space="preserve">
-    <value>--output &lt;dir&gt;    Output directory (default: book's directory)</value>
+    <value>Output directory (default: book's directory)</value>
   </data>
   <data name="HelpTipDragDrop" xml:space="preserve">
     <value>Tip: You can also drag and drop an EPUB file onto the executable.</value>
   </data>
   <data name="HelpVoiceOption" xml:space="preserve">
-    <value>--voice &lt;name&gt;    TTS voice name (partial match)</value>
+    <value>TTS voice ID or unique name match</value>
   </data>
   <data name="HelpVoicesDescription" xml:space="preserve">
     <value>List available TTS voices</value>
@@ -607,5 +607,20 @@
   </data>
   <data name="StatusVoiceSet" xml:space="preserve">
     <value>✓ Voice set to '{0}'.</value>
+  </data>
+  <data name="HelpProviderOption" xml:space="preserve">
+    <value>TTS provider ID</value>
+  </data>
+  <data name="HelpTtsDescription" xml:space="preserve">
+    <value>Configure external TTS providers</value>
+  </data>
+  <data name="LabelProvider" xml:space="preserve">
+    <value>Provider</value>
+  </data>
+  <data name="MenuConfigureTtsProviders" xml:space="preserve">
+    <value>⚙ Configure TTS providers</value>
+  </data>
+  <data name="PromptSelectProvider" xml:space="preserve">
+    <value>Select a TTS provider:</value>
   </data>
 </root>

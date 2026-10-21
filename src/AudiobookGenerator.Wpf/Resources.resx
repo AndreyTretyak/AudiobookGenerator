@@ -213,4 +213,37 @@
   <data name="BookOpenError" xml:space="preserve">
     <value>Error when opening book</value>
   </data>
+  <data name="ProviderLabel" xml:space="preserve">
+    <value>Provider</value>
+  </data>
+  <data name="TtsSettingsLabel" xml:space="preserve">
+    <value>TTS settings...</value>
+  </data>
+  <data name="CancelGenerationLabel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="GenerationCancelledMessage" xml:space="preserve">
+    <value>Audiobook generation cancelled.</value>
+  </data>
+  <data name="VisionModelLabel" xml:space="preserve">
+    <value>Vision model:</value>
+  </data>
+  <data name="VisionSettingsLabel" xml:space="preserve">
+    <value>Vision settings...</value>
+  </data>
+  <data name="GenerateMissingDescriptionsLabel" xml:space="preserve">
+    <value>Generate missing</value>
+  </data>
+  <data name="SaveProjectAsLabel" xml:space="preserve">
+    <value>Save project as...</value>
+  </data>
+  <data name="ApprovedNarrationLabel" xml:space="preserve">
+    <value>Approved narration</value>
+  </data>
+  <data name="GeneratedCandidateLabel" xml:space="preserve">
+    <value>Generated candidate</value>
+  </data>
+  <data name="ImagePrivacyNotice" xml:space="preserve">
+    <value>The configured endpoint receives a normalized image and bounded nearby chapter context.</value>
+  </data>
 </root>

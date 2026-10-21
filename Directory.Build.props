@@ -1,7 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <PropertyGroup>
-    <CurrentTargetFramework>net10.0-windows</CurrentTargetFramework>
+  <PropertyGroup Label="TargetFrameworks">
+    <PortableAot>false</PortableAot>
+    <WindowsTargetFramework>net10.0-windows</WindowsTargetFramework>
+    <PortableTargetFramework>net10.0</PortableTargetFramework>
+    <CurrentTargetFramework>$(WindowsTargetFramework)</CurrentTargetFramework>
+    <CoreTargetFramework Condition="'$(PortableAot)' == 'true'">$(PortableTargetFramework)</CoreTargetFramework>
+    <CoreTargetFramework Condition="'$(CoreTargetFramework)' == ''">$(WindowsTargetFramework)</CoreTargetFramework>
+    <ConsoleTargetFramework Condition="'$(PortableAot)' == 'true'">$(PortableTargetFramework)</ConsoleTargetFramework>
+    <ConsoleTargetFramework Condition="'$(ConsoleTargetFramework)' == ''">$(WindowsTargetFramework)</ConsoleTargetFramework>
+    <WpfTargetFramework>$(WindowsTargetFramework)</WpfTargetFramework>
+    <TestTargetFramework Condition="'$(PortableAot)' == 'true'">$(PortableTargetFramework)</TestTargetFramework>
+    <TestTargetFramework Condition="'$(TestTargetFramework)' == ''">$(WindowsTargetFramework)</TestTargetFramework>
+  </PropertyGroup>
+  <PropertyGroup Label="PortableAot" Condition="'$(PortableAot)' == 'true'">
+    <PortableAotSupportedRuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64</PortableAotSupportedRuntimeIdentifiers>
   </PropertyGroup>
   <PropertyGroup>
     <UseArtifactsOutput>true</UseArtifactsOutput>
@@ -21,7 +34,7 @@
     <Version>$(MajorVersion).$([System.DateTime]::UtcNow.ToString("yyMM.ddHH.mmss"))$(VersionSufix)</Version>
   </PropertyGroup>
   <PropertyGroup Label="Signing">
-    <SignAssembly>false</SignAssembly> <!-- disabled until FFMpegCore and VersOne.Epub not signed  -->
+    <SignAssembly>false</SignAssembly> <!-- disabled until VersOne.Epub is signed -->
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)\YewConeOssKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>

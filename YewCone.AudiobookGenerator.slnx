@@ -12,4 +12,5 @@
   <Project Path="src/AudiobookGenerator.Console/YewCone.AudiobookGenerator.Console.csproj" />
   <Project Path="src/AudiobookGenerator.Core/YewCone.AudiobookGenerator.Core.csproj" />
   <Project Path="src/AudiobookGenerator.Wpf/YewCone.AudiobookGenerator.Wpf.csproj" DefaultStartup="true" />
+  <Project Path="tests/AudiobookGenerator.Core.Tests/YewCone.AudiobookGenerator.Core.Tests.csproj" />
 </Solution>
